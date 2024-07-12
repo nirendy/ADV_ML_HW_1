@@ -1,3 +1,5 @@
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,17 +32,15 @@ class TransformerEncoderLayer(nn.Module):
 
 # Simplified Transformer Architecture Implementation
 class TransformerArchitecture(Architecture):
-    def __init__(self):
-        self.d_model = 512
-        self.nhead = 8
-        self.num_layers = 6
-        self.dim_feedforward = 2048
-        self.dropout = 0.1
-
     def initialize_model(self):
-        encoder_layer = TransformerEncoderLayer(self.d_model, self.nhead, self.dim_feedforward, self.dropout)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.num_layers)
-        self.fc = nn.Linear(self.d_model, 1)
+        encoder_layer = TransformerEncoderLayer(
+            self.config['d_model'],
+            self.config['nhead'],
+            self.config['dim_feedforward'],
+            self.config['dropout']
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.config['num_layers'])
+        self.fc = nn.Linear(self.config['d_model'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 
@@ -50,7 +50,6 @@ class TransformerArchitecture(Architecture):
         return params
 
     def train_model(self, train_loader):
-        self.train()
         for data, target in train_loader:
             self.optimizer.zero_grad()
             output = self.forward(data)
@@ -58,20 +57,17 @@ class TransformerArchitecture(Architecture):
             loss.backward()
             self.optimizer.step()
 
-    def evaluate_model(self, test_loader):
-        self.eval()
+    def evaluate_model(self, test_loader) -> Dict[str, float]:
         test_loss = 0
         with torch.no_grad():
             for data, target in test_loader:
                 output = self.forward(data)
                 test_loss += self.criterion(output, target).item()
-        self.test_loss = test_loss / len(test_loader)
+        # self.test_loss = test_loss / len(test_loader)
+        return {'Test Loss': test_loss / len(test_loader)}
 
     def forward(self, x):
         x = x.permute(1, 0, 2)  # (batch_size, seq_len, d_model) -> (seq_len, batch_size, d_model)
         output = self.transformer_encoder(x)
         output = self.fc(output[-1])  # Use the output of the last token
         return output
-
-    def get_metrics(self):
-        return {'Test Loss': self.test_loss}

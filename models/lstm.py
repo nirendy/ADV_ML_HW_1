@@ -1,8 +1,11 @@
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from models.architecture import Architecture
+from utils.config_types import LSTMConfig
 
 
 class LSTMCell(nn.Module):
@@ -31,16 +34,13 @@ class LSTMCell(nn.Module):
 
 # Simple LSTM Architecture Implementation
 class LSTMArchitecture(Architecture):
-    def __init__(self):
-        self.hidden_size = 20
-        self.input_size = 10
-        self.num_layers = 2
+    config: LSTMConfig
 
     def initialize_model(self):
-        self.layers = nn.ModuleList([LSTMCell(self.input_size, self.hidden_size)])
-        for _ in range(1, self.num_layers):
-            self.layers.append(LSTMCell(self.hidden_size, self.hidden_size))
-        self.fc = nn.Linear(self.hidden_size, 1)
+        self.layers = nn.ModuleList([LSTMCell(self.config['input_size'], self.config['hidden_size'])])
+        for _ in range(1, self.config['num_layers']):
+            self.layers.append(LSTMCell(self.config['hidden_size'], self.config['hidden_size']))
+        self.fc = nn.Linear(self.config['hidden_size'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 
@@ -51,7 +51,6 @@ class LSTMArchitecture(Architecture):
         return params
 
     def train_model(self, train_loader):
-        self.train()
         for data, target in train_loader:
             self.optimizer.zero_grad()
             output = self.forward(data)
@@ -59,27 +58,24 @@ class LSTMArchitecture(Architecture):
             loss.backward()
             self.optimizer.step()
 
-    def evaluate_model(self, test_loader):
-        self.eval()
+    def evaluate_model(self, test_loader) -> Dict[str, float]:
         test_loss = 0
         with torch.no_grad():
             for data, target in test_loader:
                 output = self.forward(data)
                 test_loss += self.criterion(output, target).item()
-        self.test_loss = test_loss / len(test_loader)
+
+        return {'Test Loss': test_loss / len(test_loader)}
 
     def forward(self, x):
-        h = [torch.zeros(x.size(0), self.hidden_size).to(x.device) for _ in range(self.num_layers)]
-        c = [torch.zeros(x.size(0), self.hidden_size).to(x.device) for _ in range(self.num_layers)]
+        h = [torch.zeros(x.size(0), self.config['hidden_size']).to(x.device) for _ in range(self.config['num_layers'])]
+        c = [torch.zeros(x.size(0), self.config['hidden_size']).to(x.device) for _ in range(self.config['num_layers'])]
 
         for t in range(x.size(1)):
             inp = x[:, t]
-            for l in range(self.num_layers):
+            for l in range(self.config['num_layers']):
                 h[l], c[l] = self.layers[l](inp, (h[l], c[l]))
                 inp = h[l]
 
         output = self.fc(inp)
         return output
-
-    def get_metrics(self):
-        return {'Test Loss': self.test_loss}

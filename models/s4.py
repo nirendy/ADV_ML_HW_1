@@ -1,8 +1,11 @@
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from models.architecture import Architecture
+from utils.config_types import S4Config
 
 
 class S4Layer(nn.Module):
@@ -24,14 +27,14 @@ class S4Layer(nn.Module):
 
 # Simplified S4 Architecture Implementation
 class S4Architecture(Architecture):
-    def __init__(self):
-        self.d_model = 512
-        self.state_size = 256
-        self.num_layers = 3
+    config: S4Config
 
     def initialize_model(self):
-        self.layers = nn.ModuleList([S4Layer(self.d_model, self.state_size) for _ in range(self.num_layers)])
-        self.fc = nn.Linear(self.d_model, 1)
+        self.layers = nn.ModuleList([
+            S4Layer(self.config['d_model'], self.config['state_size'])
+            for _ in range(self.config['num_layers'])
+        ])
+        self.fc = nn.Linear(self.config['d_model'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 
@@ -42,7 +45,6 @@ class S4Architecture(Architecture):
         return params
 
     def train_model(self, train_loader):
-        self.train()
         for data, target in train_loader:
             self.optimizer.zero_grad()
             output = self.forward(data)
@@ -50,20 +52,17 @@ class S4Architecture(Architecture):
             loss.backward()
             self.optimizer.step()
 
-    def evaluate_model(self, test_loader):
-        self.eval()
+    def evaluate_model(self, test_loader) -> Dict[str, float]:
         test_loss = 0
         with torch.no_grad():
             for data, target in test_loader:
                 output = self.forward(data)
                 test_loss += self.criterion(output, target).item()
-        self.test_loss = test_loss / len(test_loader)
+
+        return {'Test Loss': test_loss / len(test_loader)}
 
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
         output = self.fc(x)
         return output
-
-    def get_metrics(self):
-        return {'Test Loss': self.test_loss}

@@ -1,6 +1,14 @@
 from abc import ABC, abstractmethod
+from typing import Dict
+
 
 class Architecture(ABC):
+    config: Dict
+
+    def __init__(self, config: Dict):
+        self.config = config
+        self.initialize_model()
+
     @abstractmethod
     def initialize_model(self):
         pass
@@ -10,9 +18,5 @@ class Architecture(ABC):
         pass
 
     @abstractmethod
-    def evaluate_model(self, test_loader):
-        pass
-
-    @abstractmethod
-    def get_metrics(self):
+    def evaluate_model(self, test_loader) -> Dict[str, float]:
         pass
