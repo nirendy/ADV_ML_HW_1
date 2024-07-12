@@ -32,3 +32,4 @@ class Config(TypedDict):
     transformer: TransformerConfig
     s4: S4Config
     training: TrainingConfig
+    seed: int

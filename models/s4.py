@@ -27,14 +27,14 @@ class S4Layer(nn.Module):
 
 # Simplified S4 Architecture Implementation
 class S4Architecture(Architecture):
-    config: S4Config
+    model_config: S4Config
 
     def initialize_model(self):
         self.layers = nn.ModuleList([
-            S4Layer(self.config['d_model'], self.config['state_size'])
-            for _ in range(self.config['num_layers'])
+            S4Layer(self.model_config['d_model'], self.model_config['state_size'])
+            for _ in range(self.model_config['num_layers'])
         ])
-        self.fc = nn.Linear(self.config['d_model'], 1)
+        self.fc = nn.Linear(self.model_config['d_model'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 

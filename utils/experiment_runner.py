@@ -1,13 +1,28 @@
+import importlib
+import random
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
+
+import numpy as np
 import pandas as pd
+import torch
 from torch.utils.tensorboard import SummaryWriter
-from typing import List, Optional, Dict, Any
 
 from datasets.base_dataset import Dataset
+from datasets.listops_dataset import ListOpsDataset
+from datasets.mathqa_dataset import MathQADataset
+from datasets.retrieval_dataset import RetrievalDataset
 from models.architecture import Architecture
+from models.lstm import LSTMArchitecture
+from models.s4 import S4Architecture
+from models.transformer import TransformerArchitecture
+from utils.config_types import Config
 
 
 # Training Function
-
 def train_and_evaluate_model(
         architecture: Architecture,
         pretrain_dataset: Optional[Dataset],
@@ -15,49 +30,54 @@ def train_and_evaluate_model(
         writer: SummaryWriter,
         run_id: str
 ) -> Dict[str, Any]:
-    # Load data
-    if pretrain_dataset:
-        pretrain_dataset.load_data()
-        pretrain_loader = pretrain_dataset.get_train_loader()
-    else:
-        pretrain_loader = None
+    try:
+        # Load data
+        if pretrain_dataset:
+            pretrain_dataset.load_data()
+            pretrain_loader = pretrain_dataset.get_train_loader()
+        else:
+            pretrain_loader = None
 
-    finetune_dataset.load_data()
-    finetune_loader = finetune_dataset.get_train_loader()
-    test_loader = finetune_dataset.get_test_loader()
+        finetune_dataset.load_data()
+        finetune_loader = finetune_dataset.get_train_loader()
+        test_loader = finetune_dataset.get_test_loader()
 
-    # Initialize and train model
-    architecture.initialize_model()
-    if pretrain_loader:
-        architecture.train_model(pretrain_loader)
-    architecture.train_model(finetune_loader)
+        # Initialize and train model
+        architecture.initialize_model()
+        if pretrain_loader:
+            architecture.train_model(pretrain_loader)
+        architecture.train_model(finetune_loader)
 
-    # Evaluate model
-    metrics = architecture.evaluate_model(test_loader)
-    # metrics = architecture.get_metrics()
+        # Evaluate model
+        metrics = architecture.evaluate_model(test_loader)
+        # metrics = architecture.get_metrics()
 
-    # Log metrics to TensorBoard
-    for key, value in metrics.items():
-        writer.add_scalar(f"{run_id}/{key}", value)
+        # Log metrics to TensorBoard
+        for key, value in metrics.items():
+            writer.add_scalar(f"{run_id}/{key}", value)
 
-    return metrics
+        return metrics
+
+    except Exception as e:
+        architecture.logger.error(f"Error during train and evaluate: {e}")
+        return {}
 
 
 # Reporting Function
-
 def run_experiment(
         architectures: List[Architecture],
         pretrain_datasets: List[Optional[Dataset]],
-        finetune_datasets: List[Dataset]
+        finetune_datasets: List[Dataset],
+        config_name: str
 ) -> pd.DataFrame:
     results = []
-    writer = SummaryWriter(log_dir="runs")
+    writer = SummaryWriter(log_dir=f"runs/{config_name}")
 
     for architecture in architectures:
         for pretrain_dataset in pretrain_datasets:
             for finetune_dataset in finetune_datasets:
                 pretrain_name = pretrain_dataset.__class__.__name__ if pretrain_dataset else "None"
-                run_id = f"{architecture.__class__.__name__}_{pretrain_name}_{finetune_dataset.__class__.__name__}"
+                run_id = f"{config_name}_{architecture.__class__.__name__}_{pretrain_name}_{finetune_dataset.__class__.__name__}"
                 metrics = train_and_evaluate_model(architecture, pretrain_dataset, finetune_dataset, writer, run_id)
 
                 # Record results
@@ -74,3 +94,43 @@ def run_experiment(
     # Convert results to DataFrame and display
     df = pd.DataFrame(results)
     return df
+
+
+# Set random seeds for reproducibility
+def set_seed(seed: int):
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional[Dataset]], List[Dataset], str]:
+    # Dynamically import the config
+    config_module = importlib.import_module(f'configs.{config_name}')
+    config: Config = config_module.config
+
+    # Set random seeds for reproducibility
+    set_seed(42)
+
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Initialize architectures
+    architectures = [
+        LSTMArchitecture(config['lstm'], config['training']),
+        TransformerArchitecture(config['transformer'], config['training']),
+        S4Architecture(config['s4'], config['training'])
+    ]
+
+    # Initialize datasets
+    pretrain_datasets = [None, MathQADataset(), RetrievalDataset()]
+    finetune_datasets = [ListOpsDataset()]
+
+    return architectures, pretrain_datasets, finetune_datasets, config_name
+
+# Run tensorboard with the following command:
+# tensorboard --logdir=runs

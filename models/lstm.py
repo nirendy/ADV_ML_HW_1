@@ -34,23 +34,22 @@ class LSTMCell(nn.Module):
 
 # Simple LSTM Architecture Implementation
 class LSTMArchitecture(Architecture):
-    config: LSTMConfig
+    model_config: LSTMConfig
 
     def initialize_model(self):
-        self.layers = nn.ModuleList([LSTMCell(self.config['input_size'], self.config['hidden_size'])])
-        for _ in range(1, self.config['num_layers']):
-            self.layers.append(LSTMCell(self.config['hidden_size'], self.config['hidden_size']))
-        self.fc = nn.Linear(self.config['hidden_size'], 1)
+        self.model = nn.Module()
+        self.model.layers = nn.ModuleList([LSTMCell(self.model_config['input_size'], self.model_config['hidden_size'])])
+        for _ in range(1, self.model_config['num_layers']):
+            self.model.layers.append(LSTMCell(self.model_config['hidden_size'], self.model_config['hidden_size']))
+        self.model.fc = nn.Linear(self.model_config['hidden_size'], 1)
         self.criterion = nn.MSELoss()
-        self.optimizer = optim.Adam(self.parameters())
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.training_config['learning_rate'])
 
     def parameters(self):
-        params = list(self.fc.parameters())
-        for layer in self.layers:
-            params.extend(layer.parameters())
-        return params
+        return self.model.parameters()
 
     def train_model(self, train_loader):
+        self.model.train()
         for data, target in train_loader:
             self.optimizer.zero_grad()
             output = self.forward(data)
@@ -59,6 +58,7 @@ class LSTMArchitecture(Architecture):
             self.optimizer.step()
 
     def evaluate_model(self, test_loader) -> Dict[str, float]:
+        self.model.eval()
         test_loss = 0
         with torch.no_grad():
             for data, target in test_loader:
@@ -68,14 +68,18 @@ class LSTMArchitecture(Architecture):
         return {'Test Loss': test_loss / len(test_loader)}
 
     def forward(self, x):
-        h = [torch.zeros(x.size(0), self.config['hidden_size']).to(x.device) for _ in range(self.config['num_layers'])]
-        c = [torch.zeros(x.size(0), self.config['hidden_size']).to(x.device) for _ in range(self.config['num_layers'])]
+        batch_size, seq_len, _ = x.size()
+        h = [torch.zeros(batch_size, self.model_config['hidden_size']).to(x.device) for _ in
+             range(self.model_config['num_layers'])]
+        c = [torch.zeros(batch_size, self.model_config['hidden_size']).to(x.device) for _ in
+             range(self.model_config['num_layers'])]
 
-        for t in range(x.size(1)):
+        inp = x[:, 0]
+        for t in range(seq_len):
             inp = x[:, t]
-            for l in range(self.config['num_layers']):
-                h[l], c[l] = self.layers[l](inp, (h[l], c[l]))
+            for l in range(self.model_config['num_layers']):
+                h[l], c[l] = self.model.layers[l](inp, (h[l], c[l]))
                 inp = h[l]
 
-        output = self.fc(inp)
+        output = self.model.fc(inp)
         return output

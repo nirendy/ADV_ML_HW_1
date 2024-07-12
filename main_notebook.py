@@ -1,32 +1,21 @@
-#%% md
+# %% md
 # !pip install torch tensorboard
-#%%
-import torch
-
-from datasets.mathqa_dataset import MathQADataset
-from datasets.retrieval_dataset import RetrievalDataset
-
-
-#%%
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#%%
-from configs.try1 import config
+# %%
+from utils.experiment_runner import init_experiment
 from utils.experiment_runner import run_experiment
-from datasets.listops_dataset import ListOpsDataset
-from models.lstm import LSTMArchitecture
-from models.transformer import TransformerArchitecture
 
-from models.s4 import S4Architecture
+# Example usage
+config_name = 'try1'
 
-architectures = [
-    LSTMArchitecture(config['lstm']),
-    TransformerArchitecture(config['transformer']),
-    S4Architecture(config['s4'])
-]
-pretrain_datasets = [None, MathQADataset(), RetrievalDataset()]
-finetune_datasets = [ListOpsDataset()]
+# (
+#     architectures,
+#     pretrain_datasets,
+#     finetune_datasets,
+#     config_name
+# ) = init_experiment(config_name)
+experiment_parts = init_experiment(config_name)
 
 # Run the experiment and display the results
-results_df = run_experiment(architectures, pretrain_datasets, finetune_datasets)
-#%%
+results_df = run_experiment(*experiment_parts)
+# %%
 print(results_df)

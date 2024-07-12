@@ -34,13 +34,13 @@ class TransformerEncoderLayer(nn.Module):
 class TransformerArchitecture(Architecture):
     def initialize_model(self):
         encoder_layer = TransformerEncoderLayer(
-            self.config['d_model'],
-            self.config['nhead'],
-            self.config['dim_feedforward'],
-            self.config['dropout']
+            self.model_config['d_model'],
+            self.model_config['nhead'],
+            self.model_config['dim_feedforward'],
+            self.model_config['dropout']
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.config['num_layers'])
-        self.fc = nn.Linear(self.config['d_model'], 1)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.model_config['num_layers'])
+        self.fc = nn.Linear(self.model_config['d_model'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 
