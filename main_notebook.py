@@ -17,5 +17,7 @@ experiment_parts = init_experiment(config_name)
 
 # Run the experiment and display the results
 results_df = run_experiment(*experiment_parts)
+
+print(results_df)
 # %%
 print(results_df)

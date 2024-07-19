@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 import logging
+from typing import Iterator
+
 import torch
 from torch.utils.data import DataLoader
 from utils.config_types import TrainingConfig
@@ -80,7 +82,7 @@ class Architecture(ABC):
                 return self.model(data)
         raise NotImplementedError("Subclasses should implement predict if not using PyTorch.")
 
-    def parameters(self):
+    def parameters(self) -> Iterator[torch.nn.Parameter]:
         """Return the model parameters."""
         if hasattr(self, 'model') and isinstance(self.model, torch.nn.Module):
             return self.model.parameters()

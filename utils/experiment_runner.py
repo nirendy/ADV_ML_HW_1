@@ -77,7 +77,12 @@ def run_experiment(
         for pretrain_dataset in pretrain_datasets:
             for finetune_dataset in finetune_datasets:
                 pretrain_name = pretrain_dataset.__class__.__name__ if pretrain_dataset else "None"
-                run_id = f"{config_name}_{architecture.__class__.__name__}_{pretrain_name}_{finetune_dataset.__class__.__name__}"
+                run_id = '.'.join([
+                    config_name,
+                    architecture.__class__.__name__,
+                    pretrain_name,
+                    finetune_dataset.__class__.__name__
+                ])
                 metrics = train_and_evaluate_model(architecture, pretrain_dataset, finetune_dataset, writer, run_id)
 
                 # Record results
@@ -122,8 +127,8 @@ def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional
     # Initialize architectures
     architectures = [
         LSTMArchitecture(config['lstm'], config['training']),
-        TransformerArchitecture(config['transformer'], config['training']),
-        S4Architecture(config['s4'], config['training'])
+        # TransformerArchitecture(config['transformer'], config['training']),
+        # S4Architecture(config['s4'], config['training'])
     ]
 
     # Initialize datasets

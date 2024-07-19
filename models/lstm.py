@@ -36,7 +36,7 @@ class LSTMCell(nn.Module):
 class LSTMArchitecture(Architecture):
     model_config: LSTMConfig
 
-    def initialize_model(self):
+    def initialize_model(self) -> None:
         self.model = nn.Module()
         self.model.layers = nn.ModuleList([LSTMCell(self.model_config['input_size'], self.model_config['hidden_size'])])
         for _ in range(1, self.model_config['num_layers']):
@@ -44,9 +44,6 @@ class LSTMArchitecture(Architecture):
         self.model.fc = nn.Linear(self.model_config['hidden_size'], 1)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.training_config['learning_rate'])
-
-    def parameters(self):
-        return self.model.parameters()
 
     def train_model(self, train_loader):
         self.model.train()
