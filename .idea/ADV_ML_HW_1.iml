@@ -3,7 +3,7 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/data" />
-      <excludeFolder url="file://$MODULE_DIR$/runs" />
+      <excludeFolder url="file://$MODULE_DIR$/experiments" />
     </content>
     <orderEntry type="jdk" jdkName="ADV_ML_HW_1" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

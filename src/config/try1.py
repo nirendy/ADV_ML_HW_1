@@ -1,8 +1,8 @@
-from utils.config_types import Config
-from utils.config_types import LSTMConfig
-from utils.config_types import S4Config
-from utils.config_types import TrainingConfig
-from utils.config_types import TransformerConfig
+from src.utils.config_types import Config
+from src.utils.config_types import LSTMConfig
+from src.utils.config_types import S4Config
+from src.utils.config_types import TrainingConfig
+from src.utils.config_types import TransformerConfig
 
 config = Config(
     lstm=LSTMConfig(

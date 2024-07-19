@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
+from datasets import load_dataset
 
 
-class Dataset(ABC):
+class BaseDataset(ABC):
     def __init__(self, config=None):
         self.config = config
 

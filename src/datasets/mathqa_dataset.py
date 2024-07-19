@@ -3,22 +3,23 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
-from datasets.base_dataset import Dataset
+from src.datasets.base_dataset import BaseDataset
 
 
-class RetrievalDataset(Dataset):
+class MathQABaseDataset(BaseDataset):
     def load_data(self):
-        # Generate synthetic retrieval data for demonstration purposes
-        def generate_retrieval_sequence(length):
+        # Generate synthetic arithmetic data for demonstration purposes
+        def generate_arithmetic_sequence(length):
+            ops = ['+', '-', '*', '/']
             seq = []
             for _ in range(length):
-                data = np.random.randint(0, 100, size=(10, 10))  # Random sequences
-                target = np.random.randint(0, 100)  # Target is a random integer
-                seq.append((data, target))
+                num1, num2 = np.random.randint(1, 10, size=2)
+                op = np.random.choice(ops)
+                seq.append(f"{num1} {op} {num2}")
             return seq
 
-        train_sequences = generate_retrieval_sequence(100)
-        test_sequences = generate_retrieval_sequence(20)
+        train_sequences = generate_arithmetic_sequence(100)
+        test_sequences = generate_arithmetic_sequence(20)
 
         # Here we would parse these sequences and create data tensors
         # For simplicity, we just create dummy tensors

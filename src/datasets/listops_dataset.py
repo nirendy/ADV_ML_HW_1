@@ -2,10 +2,10 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
-from datasets.base_dataset import Dataset
+from src.datasets.base_dataset import BaseDataset
 
 
-class ListOpsDataset(Dataset):
+class ListOpsBaseDataset(BaseDataset):
     def load_data(self):
         # Dummy data for example purposes
         self.train_data = torch.randn(100, 10, 10)  # 100 samples, 10 timesteps, 10 features

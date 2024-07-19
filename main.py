@@ -1,8 +1,8 @@
 # %% md
 # !pip install torch tensorboard
 # %%
-from utils.experiment_runner import init_experiment
-from utils.experiment_runner import run_experiment
+from src.utils.experiment_runner import init_experiment
+from src.utils.experiment_runner import run_experiment
 
 # Example usage
 config_name = 'try1'

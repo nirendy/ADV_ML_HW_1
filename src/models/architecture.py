@@ -5,7 +5,7 @@ from typing import Iterator
 
 import torch
 from torch.utils.data import DataLoader
-from utils.config_types import TrainingConfig
+from src.utils.config_types import TrainingConfig
 
 
 class Architecture(ABC):

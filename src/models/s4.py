@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from models.architecture import Architecture
-from utils.config_types import S4Config
+from src.models.architecture import Architecture
+from src.utils.config_types import S4Config
 
 
 class S4Layer(nn.Module):

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from models.architecture import Architecture
+from src.models.architecture import Architecture
 
 
 class TransformerEncoderLayer(nn.Module):

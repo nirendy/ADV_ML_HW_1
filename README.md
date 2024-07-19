@@ -36,9 +36,9 @@ To download the LRA dataset, follow these steps:
 ```bash
 # 1. Download the dataset.
 wget https://storage.googleapis.com/long-range-arena/lra_release.gz
-mkdir -p ./data/
-tar -xvzf lra_release.gz --strip-components=2 -C ./data/ lra_release/lra_release/listops-1000
-tar -xvzf lra_release.gz --strip-components=2 -C ./data/ lra_release/lra_release/retrieval
+mkdir -p ./data/raw
+tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/listops-1000
+tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/retrieval
 
 ```
 
@@ -46,23 +46,24 @@ tar -xvzf lra_release.gz --strip-components=2 -C ./data/ lra_release/lra_release
 
 ```plaintext
 .
-├── configs/ # Contains the configuration files for the experiments.
-│   ├── try1.py
-│   └── ...
-├── datasets/ # Contains the dataset classes.
-│   ├── base_dataset.py # Base class for the datasets.
-│   ├── listops_dataset.py # Main dataset
-│   ├── mathqa_dataset.py # External dataset
-│   └── retrieval_dataset.py # LRA secondary dataset
-├── models/ # Contains the model classes.
-│   ├── architecture.py # Base class for the models.
-│   ├── lstm.py
-│   ├── s4.py
-│   └── transformer.py
-├── utils/
-│   ├── config_types.py
-│   ├── experiment_runner.py
-│   ├── metrics.py
+├── src/
+│   ├── configs/ # Contains the configuration files for the experiments.
+│   │   ├── try1.py
+│   │   └── ...
+│   ├── datasets/ # Contains the dataset classes.
+│   │   ├── base_dataset.py # Base class for the datasets.
+│   │   ├── listops_dataset.py # Main dataset
+│   │   ├── mathqa_dataset.py # External dataset
+│   │   └── retrieval_dataset.py # LRA secondary dataset
+│   ├── models/ # Contains the model classes.
+│   │   ├── architecture.py # Base class for the models.
+│   │   ├── lstm.py
+│   │   ├── s4.py
+│   │   └── transformer.py
+│   └── utils/
+│       ├── config_types.py
+│       ├── experiment_runner.py
+│       └── metrics.py
 ├── requirements.txt
 └── main_notebook.py # Main notebook to run the experiments.
 
@@ -76,5 +77,5 @@ tar -xvzf lra_release.gz --strip-components=2 -C ./data/ lra_release/lra_release
 4. View the results using tensorboard to visualize the metrics.
 
 ```bash
-tensorboard --logdir=runs
+tensorboard --logdir=experiments
 ```

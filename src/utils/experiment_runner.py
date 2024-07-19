@@ -11,22 +11,22 @@ import pandas as pd
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from datasets.base_dataset import Dataset
-from datasets.listops_dataset import ListOpsDataset
-from datasets.mathqa_dataset import MathQADataset
-from datasets.retrieval_dataset import RetrievalDataset
-from models.architecture import Architecture
-from models.lstm import LSTMArchitecture
-from models.s4 import S4Architecture
-from models.transformer import TransformerArchitecture
-from utils.config_types import Config
+from src.datasets.base_dataset import BaseDataset
+from src.datasets.listops_dataset import ListOpsBaseDataset
+from src.datasets.mathqa_dataset import MathQABaseDataset
+from src.datasets.retrieval_dataset import RetrievalBaseDataset
+from src.models.architecture import Architecture
+from src.models.lstm import LSTMArchitecture
+from src.models.s4 import S4Architecture
+from src.models.transformer import TransformerArchitecture
+from src.utils.config_types import Config
 
 
 # Training Function
 def train_and_evaluate_model(
         architecture: Architecture,
-        pretrain_dataset: Optional[Dataset],
-        finetune_dataset: Dataset,
+        pretrain_dataset: Optional[BaseDataset],
+        finetune_dataset: BaseDataset,
         writer: SummaryWriter,
         run_id: str
 ) -> Dict[str, Any]:
@@ -66,8 +66,8 @@ def train_and_evaluate_model(
 # Reporting Function
 def run_experiment(
         architectures: List[Architecture],
-        pretrain_datasets: List[Optional[Dataset]],
-        finetune_datasets: List[Dataset],
+        pretrain_datasets: List[Optional[BaseDataset]],
+        finetune_datasets: List[BaseDataset],
         config_name: str
 ) -> pd.DataFrame:
     results = []
@@ -113,7 +113,7 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional[Dataset]], List[Dataset], str]:
+def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional[BaseDataset]], List[BaseDataset], str]:
     # Dynamically import the config
     config_module = importlib.import_module(f'configs.{config_name}')
     config: Config = config_module.config
@@ -132,10 +132,7 @@ def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional
     ]
 
     # Initialize datasets
-    pretrain_datasets = [None, MathQADataset(), RetrievalDataset()]
-    finetune_datasets = [ListOpsDataset()]
+    pretrain_datasets = [None, MathQABaseDataset(), RetrievalBaseDataset()]
+    finetune_datasets = [ListOpsBaseDataset()]
 
     return architectures, pretrain_datasets, finetune_datasets, config_name
-
-# Run tensorboard with the following command:
-# tensorboard --logdir=runs
