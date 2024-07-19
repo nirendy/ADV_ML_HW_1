@@ -1,5 +1,5 @@
 # %% md
-# !pip install torch tensorboard
+# !pip install torch tensorboard datasets
 # %%
 from src.utils.experiment_runner import init_experiment
 from src.utils.experiment_runner import run_experiment
@@ -11,7 +11,7 @@ config_name = 'try1'
 #     architectures,
 #     pretrain_datasets,
 #     finetune_datasets,
-#     config_name
+#     writer,
 # ) = init_experiment(config_name)
 experiment_parts = init_experiment(config_name)
 

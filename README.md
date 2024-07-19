@@ -77,5 +77,5 @@ tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_rele
 4. View the results using tensorboard to visualize the metrics.
 
 ```bash
-tensorboard --logdir=experiments
+tensorboard --logdir=tensorboard
 ```

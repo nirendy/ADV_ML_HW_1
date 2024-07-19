@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import time
 
 from src.datasets.base_dataset import BaseDataset
 from src.datasets.listops_dataset import ListOpsBaseDataset
@@ -68,20 +69,19 @@ def run_experiment(
         architectures: List[Architecture],
         pretrain_datasets: List[Optional[BaseDataset]],
         finetune_datasets: List[BaseDataset],
-        config_name: str
+        writer: SummaryWriter
 ) -> pd.DataFrame:
     results = []
-    writer = SummaryWriter(log_dir=f"runs/{config_name}")
 
     for architecture in architectures:
         for pretrain_dataset in pretrain_datasets:
             for finetune_dataset in finetune_datasets:
                 pretrain_name = pretrain_dataset.__class__.__name__ if pretrain_dataset else "None"
                 run_id = '.'.join([
-                    config_name,
+                    SummaryWriter.get_logdir(writer),
                     architecture.__class__.__name__,
+                    finetune_dataset.__class__.__name__,
                     pretrain_name,
-                    finetune_dataset.__class__.__name__
                 ])
                 metrics = train_and_evaluate_model(architecture, pretrain_dataset, finetune_dataset, writer, run_id)
 
@@ -113,10 +113,17 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional[BaseDataset]], List[BaseDataset], str]:
+def load_config(config_name: str) -> Config:
     # Dynamically import the config
     config_module = importlib.import_module(f'configs.{config_name}')
-    config: Config = config_module.config
+    return config_module.config
+
+
+def init_experiment(config_name: str) -> Tuple[
+    List[Architecture], List[Optional[BaseDataset]], List[BaseDataset], SummaryWriter]:
+    config = load_config(config_name)
+
+    writer = SummaryWriter(log_dir=f"tensorboard/{config_name}/{time.strftime('%Y%m%d-%H%M%S')}")
 
     # Set random seeds for reproducibility
     set_seed(42)
@@ -135,4 +142,4 @@ def init_experiment(config_name: str) -> Tuple[List[Architecture], List[Optional
     pretrain_datasets = [None, MathQABaseDataset(), RetrievalBaseDataset()]
     finetune_datasets = [ListOpsBaseDataset()]
 
-    return architectures, pretrain_datasets, finetune_datasets, config_name
+    return architectures, pretrain_datasets, finetune_datasets, writer
