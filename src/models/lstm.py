@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Tuple, Dict
 
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ from src.utils.config_types import LSTMConfig
 
 
 class LSTMCell(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size: int, hidden_size: int):
         super(LSTMCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -19,7 +19,7 @@ class LSTMCell(nn.Module):
         self.i2h = nn.Linear(input_size, 4 * hidden_size)
         self.h2h = nn.Linear(hidden_size, 4 * hidden_size)
 
-    def forward(self, x, hidden):
+    def forward(self, x: torch.Tensor, hidden: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         h, c = hidden
         gates = self.i2h(x) + self.h2h(h)
         i_gate, f_gate, o_gate, c_gate = gates.chunk(4, 1)
@@ -36,16 +36,13 @@ class LSTMCell(nn.Module):
 
 
 class LSTMLayer(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers):
+    def __init__(self, input_size: int, hidden_size: int, num_layers: int):
         super(LSTMLayer, self).__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
+        self.cells = nn.ModuleList([LSTMCell(input_size if i == 0 else hidden_size, hidden_size) for i in range(num_layers)])
 
-        self.cells = nn.ModuleList()
-        for i in range(num_layers):
-            self.cells.append(LSTMCell(input_size if i == 0 else hidden_size, hidden_size))
-
-    def forward(self, x, hidden):
+    def forward(self, x: torch.Tensor, hidden: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         h, c = hidden
         h_next, c_next = [], []
         seq_len, batch_size, _ = x.size()
@@ -54,9 +51,9 @@ class LSTMLayer(nn.Module):
         for t in range(seq_len):
             input_t = x[t]
             for i, cell in enumerate(self.cells):
-                h_t, c_t = cell(input_t, (h[i], c[i]))
-                h_next.append(h_t)
-                c_next.append(c_t)
+                h_t, (h_i, c_i) = cell(input_t, (h[i], c[i]))
+                h_next.append(h_i)
+                c_next.append(c_i)
                 input_t = h_t
             outputs.append(h_t)
 
@@ -66,7 +63,6 @@ class LSTMLayer(nn.Module):
         return torch.stack(outputs), (h_next, c_next)
 
 
-# Simple LSTM Architecture Implementation
 class LSTMArchitecture(Architecture):
     model_config: LSTMConfig
 
@@ -76,9 +72,9 @@ class LSTMArchitecture(Architecture):
         self.model.lstm = LSTMLayer(
             self.model_config['input_size'], self.model_config['hidden_size'], self.model_config['num_layers']
         )
-        self.model.fc = nn.Linear(self.model_config['hidden_size'], 1)
+        self.model.fc = nn.Linear(self.model_config['hidden_size'], dataset.num_classes)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size = x.size(0)
         h_0 = torch.zeros(self.model_config['num_layers'], batch_size, self.model_config['hidden_size']).to(x.device)
         c_0 = torch.zeros(self.model_config['num_layers'], batch_size, self.model_config['hidden_size']).to(x.device)

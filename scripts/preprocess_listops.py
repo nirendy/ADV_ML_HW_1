@@ -21,10 +21,12 @@ def build_vocab(file_path):
             return vocab
 
 
-def preprocess_data(part, vocab, ch2idx, max_seq, input_file, output_data_file, output_target_file):
+def preprocess_data(part: str, vocab: list, ch2idx: dict, max_seq: int, input_file: Path, output_data_file: Path,
+                    output_target_file: Path) -> None:
+    """Preprocess the data and save the tensors."""
     sources = []
     targets = []
-    sources.append(torch.Tensor([0 for _ in range(max_seq)]))
+    sources.append(torch.tensor([0 for _ in range(max_seq)], dtype=torch.long))  # Dummy tensor
     with open(input_file) as tsvfile:
         tsvreader = csv.reader(tsvfile, delimiter="\t")
         next(tsvreader, None)  # Skip the headers
@@ -36,11 +38,11 @@ def preprocess_data(part, vocab, ch2idx, max_seq, input_file, output_data_file, 
             seq = line.split(' ')
             seq = list(filter(None, seq))
             mapped_seq = [ch2idx[token] for token in seq]
-            sources.append(torch.Tensor(mapped_seq))
+            sources.append(torch.tensor(mapped_seq, dtype=torch.long))  # Save as LongTensor
             targets.append(int(targ))
 
-    final_tensor = pad_sequence(sources, padding_value=ch2idx['<PAD>']).T[1:]
-    final_targets = torch.tensor(targets, dtype=torch.int32)
+        final_tensor = pad_sequence(sources, padding_value=ch2idx['<PAD>']).T[1:]  # Remove dummy tensor
+        final_targets = torch.tensor(targets, dtype=torch.long)  # Save targets as LongTensor
     torch.save(final_tensor, output_data_file)
     torch.save(final_targets, output_target_file)
 

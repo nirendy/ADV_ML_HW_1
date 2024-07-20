@@ -22,7 +22,12 @@ class BaseDataset(ABC):
 
     @property
     @abstractmethod
-    def vocab_size(self):
+    def vocab_size(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def num_classes(self) -> int:
         pass
 
     def get_train_dataset(self) -> Dataset:

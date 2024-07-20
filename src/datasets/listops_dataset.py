@@ -14,6 +14,10 @@ class ListOpsDataset(BaseDataset):
         vocab_size_file = self.data_dir / 'vocab_size.pt'
         return torch.load(vocab_size_file)
 
+    @property
+    def num_classes(self) -> int:
+        return 10
+
     def get_dataset(self, split: str) -> Dataset:
         data_file = self.data_dir / f'{split}_clean.pt'
         target_file = self.data_dir / f'target_{split}_clean.pt'
