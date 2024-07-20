@@ -25,6 +25,7 @@ class TrainingConfig(TypedDict):
     batch_size: int
     learning_rate: float
     epochs: int
+    seed: int
 
 
 class Config(TypedDict):
@@ -32,4 +33,3 @@ class Config(TypedDict):
     transformer: TransformerConfig
     s4: S4Config
     training: TrainingConfig
-    seed: int

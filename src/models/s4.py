@@ -44,14 +44,6 @@ class S4Architecture(Architecture):
             params.extend(layer.parameters())
         return params
 
-    def train_model(self, train_loader):
-        for data, target in train_loader:
-            self.optimizer.zero_grad()
-            output = self.forward(data)
-            loss = self.criterion(output, target)
-            loss.backward()
-            self.optimizer.step()
-
     def evaluate_model(self, test_loader) -> Dict[str, float]:
         test_loss = 0
         with torch.no_grad():

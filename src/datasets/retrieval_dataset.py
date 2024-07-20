@@ -6,7 +6,7 @@ from torch.utils.data import TensorDataset
 from src.datasets.base_dataset import BaseDataset
 
 
-class RetrievalBaseDataset(BaseDataset):
+class RetrievalDataset(BaseDataset):
     def load_data(self):
         # Generate synthetic retrieval data for demonstration purposes
         def generate_retrieval_sequence(length):

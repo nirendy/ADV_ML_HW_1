@@ -1,22 +1,36 @@
 import torch
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
+from torch.utils.data import Dataset
 
 from src.datasets.base_dataset import BaseDataset
 
 
-class ListOpsBaseDataset(BaseDataset):
-    def load_data(self):
-        # Dummy data for example purposes
-        self.train_data = torch.randn(100, 10, 10)  # 100 samples, 10 timesteps, 10 features
-        self.train_targets = torch.randn(100, 1)
-        self.test_data = torch.randn(20, 10, 10)
-        self.test_targets = torch.randn(20, 1)
+class ListOpsDataset(BaseDataset):
+    @property
+    def data_dir(self):
+        return self.base_data_dir / 'preprocessed' / 'listops-1000'
 
-    def get_train_loader(self):
-        train_dataset = TensorDataset(self.train_data, self.train_targets)
-        return DataLoader(train_dataset, batch_size=16, shuffle=True)
+    @property
+    def vocab_size(self) -> int:
+        vocab_size_file = self.data_dir / 'vocab_size.pt'
+        return torch.load(vocab_size_file)
 
-    def get_test_loader(self):
-        test_dataset = TensorDataset(self.test_data, self.test_targets)
-        return DataLoader(test_dataset, batch_size=16, shuffle=False)
+    def get_dataset(self, split: str) -> Dataset:
+        data_file = self.data_dir / f'{split}_clean.pt'
+        target_file = self.data_dir / f'target_{split}_clean.pt'
+
+        data = torch.load(data_file)
+        targets = torch.load(target_file)
+
+        return ListOpsTorchDataset(data, targets)
+
+
+class ListOpsTorchDataset(Dataset):
+    def __init__(self, data: torch.Tensor, targets: torch.Tensor):
+        self.data = data
+        self.targets = targets
+
+    def __len__(self) -> int:
+        return len(self.targets)
+
+    def __getitem__(self, idx: int) -> tuple:
+        return self.data[idx], self.targets[idx]

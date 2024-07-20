@@ -26,6 +26,6 @@ config = Config(
         batch_size=32,
         learning_rate=0.0001,
         epochs=10,
+        seed=42
     ),
-    seed=42
 )

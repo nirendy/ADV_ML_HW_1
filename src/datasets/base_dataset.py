@@ -1,42 +1,35 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
+
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, DataLoader, random_split
-from datasets import load_dataset
+
+
+# from datasets import load_dataset
 
 
 class BaseDataset(ABC):
-    def __init__(self, config=None):
-        self.config = config
+    base_data_dir = Path('./data')
 
     @abstractmethod
-    def load_data(self) -> None:
-        """Load the dataset into memory or prepare it for use."""
-        pass
-
-    @abstractmethod
-    def get_train_loader(self) -> DataLoader:
-        """Return the DataLoader for the training dataset.
+    def get_dataset(self, split: str) -> Dataset:
+        """Return the DataLoader for the dataset.
 
         Returns:
-            DataLoader: The DataLoader instance for the training data.
+            DataLoader: The DataLoader instance for the data.
         """
         pass
 
+    @property
     @abstractmethod
-    def get_test_loader(self) -> DataLoader:
-        """Return the DataLoader for the test dataset.
-
-        Returns:
-            DataLoader: The DataLoader instance for the test data.
-        """
+    def vocab_size(self):
         pass
 
-    def get_val_loader(self) -> DataLoader:
-        """Return the DataLoader for the validation dataset.
+    def get_train_dataset(self) -> Dataset:
+        return self.get_dataset("train")
 
-        This method is optional and can be overridden if a validation set is available.
+    def get_test_dataset(self) -> Dataset:
+        return self.get_dataset("test")
 
-        Returns:
-            DataLoader: The DataLoader instance for the validation data.
-        """
-        raise NotImplementedError("Validation loader is not implemented for this dataset.")
+    def get_val_dataset(self) -> Dataset:
+        return self.get_dataset("validation")

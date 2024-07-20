@@ -6,7 +6,7 @@ from torch.utils.data import TensorDataset
 from src.datasets.base_dataset import BaseDataset
 
 
-class MathQABaseDataset(BaseDataset):
+class MathQADataset(BaseDataset):
     def load_data(self):
         # Generate synthetic arithmetic data for demonstration purposes
         def generate_arithmetic_sequence(length):
