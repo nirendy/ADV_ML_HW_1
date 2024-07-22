@@ -8,12 +8,13 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 
 from src.datasets.base_dataset import BaseDataset
+from src.datasets.imdb_lra_dataset import IMDBlraDataset
 from src.datasets.listops_dataset import ListOpsDataset
-from src.datasets.mathqa_dataset import MathQADataset
-from src.datasets.retrieval_dataset import RetrievalDataset
+from src.datasets.wikitext_dataset import WikiTextDataset
 from src.models.architecture import Architecture
 from src.models.lstm import LSTMArchitecture
 from src.models.s4 import S4Architecture
+from src.models.s4_copy import S4CopyArchitecture
 from src.models.transformer import TransformerArchitecture
 from src.trainer import Trainer
 from src.utils.config_types import Config
@@ -72,15 +73,21 @@ def init_experiment(config_name: str) -> Tuple[
 
     # Initialize architectures
     architectures = [
-        LSTMArchitecture(config['lstm']),
-        TransformerArchitecture(config['transformer']),
-        S4Architecture(config['s4'])
+        # LSTMArchitecture(config['lstm']),
+        # TransformerArchitecture(config['transformer']),
+        # S4Architecture(config['s4']),
+        S4CopyArchitecture(config['s4']),
     ]
 
     # Initialize datasets
-    # pretrain_datasets = [None, MathQABaseDataset(), RetrievalBaseDataset()]
+    pretrain_datasets = [
+        None,
+        # ListOpsDataset(),
+        IMDBlraDataset('autoregressive'),
+        WikiTextDataset('autoregressive'),
+    ]
     pretrain_datasets = [None]
-    finetune_datasets = [ListOpsDataset()]
+    finetune_datasets = [IMDBlraDataset('classification')]
 
     trainer = Trainer(config['training'])
 

@@ -38,7 +38,6 @@ To download the LRA dataset, follow these steps:
 wget https://storage.googleapis.com/long-range-arena/lra_release.gz
 mkdir -p ./data/raw
 tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/listops-1000
-tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/tsv_data
 rm lra_release.gz
 
 ```

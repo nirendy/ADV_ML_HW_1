@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 
 class BaseDataset(ABC):
+    phase_name: str
     base_data_dir = Path('./data')
 
     @abstractmethod

@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from src.datasets.base_dataset import BaseDataset
-from src.datasets.base_dataset import BaseDataset
 from src.models.architecture import Architecture
 from src.utils.config_types import TrainingConfig
 
@@ -20,8 +19,11 @@ class Trainer:
     def __init__(self, training_config: TrainingConfig):
         self.training_config = training_config
 
-    def get_loss_fn(self) -> nn.Module:
-        return nn.CrossEntropyLoss()
+    def get_loss_fn(self, phase_name: str) -> nn.Module:
+        if phase_name == 'classification':
+            return nn.CrossEntropyLoss()
+        elif phase_name == 'autoregressive':
+            return nn.CrossEntropyLoss(ignore_index=-1)  # Use ignore_index to ignore padding tokens
 
     def train_and_evaluate_model(
             self,
@@ -40,14 +42,14 @@ class Trainer:
         architecture.model.to(device)
 
         if pretrain_dataset:
-            self._train_model(architecture, pretrain_dataset, writer, 'Pretrain', device, run_id)
-        self._train_model(architecture, finetune_dataset, writer, 'Finetune', device, run_id)
+            self._train_model(architecture, pretrain_dataset, writer, device, run_id)
+        self._train_model(architecture, finetune_dataset, writer, device, run_id)
 
         metrics = self._evaluate_model(architecture, finetune_dataset)
         return metrics
 
     def _train_model(
-            self, architecture: Architecture, dataset: BaseDataset, writer: SummaryWriter, phase_name: str,
+            self, architecture: Architecture, dataset: BaseDataset, writer: SummaryWriter,
             device: torch.device, run_id: str
     ) -> None:
         data_loader = DataLoader(
@@ -56,7 +58,7 @@ class Trainer:
             shuffle=True
         )
         optimizer = optim.Adam(architecture.model.parameters(), lr=self.training_config['learning_rate'])
-        loss_fn = self.get_loss_fn()
+        loss_fn = self.get_loss_fn(dataset.phase_name)
         architecture.model.train()
         for epoch in range(self.training_config['epochs']):
             for i, data in enumerate(data_loader):
@@ -64,16 +66,26 @@ class Trainer:
                 inputs, labels = inputs.to(device), labels.to(device)
                 optimizer.zero_grad()
                 outputs = architecture.forward(inputs)
-                loss = loss_fn(outputs, labels)
+
+                if dataset.phase_name == 'classification':
+                    loss = loss_fn(outputs, labels)
+                elif dataset.phase_name == 'autoregressive':
+                    # Shift inputs to create target for next token prediction
+                    targets = inputs[:, 1:].contiguous().view(-1)
+                    outputs = outputs[:, :-1].contiguous().view(-1, outputs.size(-1))
+                    loss = loss_fn(outputs, targets)
+                else:
+                    raise ValueError(f'Invalid phase name: {dataset.phase_name}')
+
                 loss.backward()
                 optimizer.step()
 
                 # Log the training loss
                 if i % 10 == 0:
                     step = epoch * len(data_loader) + i
-                    writer.add_scalar(f'{run_id}/{phase_name}/Loss', loss.item(), step)
+                    writer.add_scalar(f'{run_id}/{dataset.phase_name}/Loss', loss.item(), step)
                     print(
-                        f'{phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
+                        f'{dataset.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
                         f'Step [{i + 1}/{len(data_loader)}], Loss: {loss.item():.4f}'
                     )
 
@@ -82,7 +94,7 @@ class Trainer:
         test_loss = 0
         correct = 0
         total = 0
-        loss_fn = self.get_loss_fn()
+        loss_fn = self.get_loss_fn('classification')
         with torch.no_grad():
             for data in data_loader:
                 inputs, labels = data
