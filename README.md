@@ -38,8 +38,19 @@ To download the LRA dataset, follow these steps:
 wget https://storage.googleapis.com/long-range-arena/lra_release.gz
 mkdir -p ./data/raw
 tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/listops-1000
-tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/retrieval
+tar -xvzf lra_release.gz --strip-components=2 -C ./data/raw lra_release/lra_release/tsv_data
+rm lra_release.gz
 
+```
+
+To download the MathQA dataset, follow these steps:
+
+```bash
+# 1. Download the dataset.
+wget https://math-qa.github.io/math-QA/data/MathQA.zip
+mkdir -p ./data/raw
+unzip MathQA.zip -d ./data/raw/mathqa
+rm MathQA.zip
 ```
 
 ## Directory Structure
