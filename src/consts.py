@@ -1,0 +1,40 @@
+from pathlib import Path
+from src.types import SPLIT
+
+
+class PATHS:
+    PROJECT_DIR = Path(__file__).parent.parent.resolve()
+    DATA_DIR = PROJECT_DIR / 'data'
+    RAW_DATA_DIR = DATA_DIR / 'raw'
+    PREPROCESSED_DATA_DIR = DATA_DIR / 'preprocessed'
+
+    RAW_IMDB_LRA_DIR = RAW_DATA_DIR / 'imdb_lra'
+    RAW_WIKITEXT_DIR = RAW_DATA_DIR / 'wikitext_cache'
+    PREPROCESSED_IMDB_LRA_DIR = PREPROCESSED_DATA_DIR / 'imdb_lra'
+
+    CHECKPOINTS_DIR = PROJECT_DIR / 'checkpoints'
+    LOGS_DIR = PROJECT_DIR / 'logs'
+
+    TENSORBOARD_DIR = PROJECT_DIR / 'tensorboard'
+
+
+class DATASETS_CONSTANTS:
+    IMDB_LRA_NAME = 'imdb_reviews'
+    WIKITEXT_DATASET_PATH = 'Salesforce/wikitext'
+    WIKITEXT_NAME = 'wikitext-103-v1'
+
+    IMDB_LRA_SPLIT_NAMES = [SPLIT.TRAIN, SPLIT.TRAIN]
+
+
+# enum for architecture names
+
+
+class STEPS:
+    WARMUP_STEPS = 20
+    SAVE_STEP = 10
+    LOG_STEP = 10
+    EVAL_STEP = 1000
+
+
+class FORMATS:
+    TIME = "%Y%m%d_%H-%M-%S"

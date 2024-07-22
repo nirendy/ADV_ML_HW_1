@@ -2,6 +2,8 @@ import torch
 from torch.utils.data import Dataset
 
 from src.datasets.base_dataset import BaseDataset
+from src.types import PHASE
+from src.types import SPLIT
 
 
 class ListOpsDataset(BaseDataset):
@@ -18,7 +20,7 @@ class ListOpsDataset(BaseDataset):
     def num_classes(self) -> int:
         return 10
 
-    def get_dataset(self, split: str) -> Dataset:
+    def get_dataset(self, split: SPLIT) -> Dataset:
         data_file = self.data_dir / f'{split}_clean.pt'
         target_file = self.data_dir / f'target_{split}_clean.pt'
 

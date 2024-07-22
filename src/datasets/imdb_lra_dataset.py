@@ -2,12 +2,12 @@ from datasets import DatasetDict
 from transformers import BertTokenizer
 from torch.utils.data import Dataset
 from src.datasets.base_dataset import BaseDataset
+from src.types import PHASE
 
 
 class IMDBlraDataset(BaseDataset):
-    def __init__(self, phase_name: str):
-        super().__init__()
-        self.phase_name = phase_name
+    def __init__(self, phase_name: PHASE):
+        super().__init__(phase_name)
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     @property
