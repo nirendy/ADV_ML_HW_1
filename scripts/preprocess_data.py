@@ -9,7 +9,5 @@ data_dir = (Path('..') / 'data' / 'raw').resolve()
 # Load the LRA IMDb reviews dataset
 imdb_lra = tfds.load('imdb_reviews', data_dir=data_dir / 'imdb_lra')
 
-os.environ['HF_HOME'] = str(data_dir / 'huggingface_cache')
-
 # Load the Wikitext-103 dataset
 wikitext_dataset = load_dataset("Salesforce/wikitext", "wikitext-103-v1", cache_dir=str(data_dir / 'wikitext_cache'))
