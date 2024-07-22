@@ -9,10 +9,9 @@ class LSTMConfig(TypedDict):
 
 class TransformerConfig(TypedDict):
     d_model: int
-    nhead: int
+    num_heads: int
     num_layers: int
     dim_feedforward: int
-    dropout: float
 
 
 class S4Config(TypedDict):

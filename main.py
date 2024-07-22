@@ -5,7 +5,7 @@ from src.utils.experiment_runner import init_experiment
 from src.utils.experiment_runner import run_experiment
 
 # Example usage
-config_name = 'try1'
+config_name = 'small'
 
 experiment_parts = init_experiment(config_name)
 

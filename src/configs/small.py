@@ -11,14 +11,14 @@ config = Config(
         num_layers=2
     ),
     transformer=TransformerConfig(
-        d_model=512,
-        num_heads=8,
-        num_layers=6,
-        dim_feedforward=2048,
+        d_model=16,
+        num_heads=2,
+        num_layers=3,
+        dim_feedforward=128,
     ),
     s4=S4Config(
-        d_model=512,
-        state_size=256,
+        d_model=16,
+        state_size=8,
         num_layers=3
     ),
     training=TrainingConfig(

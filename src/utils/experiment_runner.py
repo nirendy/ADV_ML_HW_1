@@ -13,6 +13,8 @@ from src.datasets.mathqa_dataset import MathQADataset
 from src.datasets.retrieval_dataset import RetrievalDataset
 from src.models.architecture import Architecture
 from src.models.lstm import LSTMArchitecture
+from src.models.s4 import S4Architecture
+from src.models.transformer import TransformerArchitecture
 from src.trainer import Trainer
 from src.utils.config_types import Config
 
@@ -71,8 +73,8 @@ def init_experiment(config_name: str) -> Tuple[
     # Initialize architectures
     architectures = [
         LSTMArchitecture(config['lstm']),
-        # TransformerArchitecture(config['transformer'], config['training']),
-        # S4Architecture(config['s4'], config['training'])
+        TransformerArchitecture(config['transformer']),
+        S4Architecture(config['s4'])
     ]
 
     # Initialize datasets
