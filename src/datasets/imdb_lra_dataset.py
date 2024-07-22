@@ -1,8 +1,7 @@
+from datasets import DatasetDict
 from transformers import BertTokenizer
 from torch.utils.data import Dataset
-
 from src.datasets.base_dataset import BaseDataset
-import tensorflow_datasets as tfds
 
 
 class IMDBlraDataset(BaseDataset):
@@ -13,7 +12,7 @@ class IMDBlraDataset(BaseDataset):
 
     @property
     def data_dir(self):
-        return self.base_data_dir / 'raw' / 'imdb_lra'
+        return self.base_data_dir / 'preprocessed' / 'imdb_lra'
 
     @property
     def vocab_size(self) -> int:
@@ -29,9 +28,9 @@ class IMDBlraDataset(BaseDataset):
             raise ValueError(f'Invalid phase name: {self.phase_name}')
 
     def get_dataset(self, split: str) -> Dataset:
-        imdb_lra_dataset = tfds.load('imdb_reviews', data_dir=self.data_dir)
+        imdb_lra_dataset = DatasetDict.load_from_disk(self.data_dir)
 
-        return IMDBlraDatasetTorchDataset(imdb_lra_dataset[split])
+        return IMDBlraDatasetTorchDataset(imdb_lra_dataset[split], self.tokenizer)
 
 
 class IMDBlraDatasetTorchDataset(Dataset):
@@ -45,12 +44,12 @@ class IMDBlraDatasetTorchDataset(Dataset):
     def __getitem__(self, idx):
         item = self.imdb_lra_dataset[idx]
 
-        return {
-            'text': self.tokenizer(
-                item['text'],
+        return (
+            self.tokenizer(
+                item['text'].decode(),
                 padding='max_length',
                 truncation=True,
                 return_tensors='pt'
             )['input_ids'].squeeze(),
-            'label': item['label']
-        }
+            item['label']
+        )

@@ -42,12 +42,12 @@ class WikiTextDatasetTorchDataset(Dataset):
     def __getitem__(self, idx):
         item = self.wikitext_dataset[idx]
 
-        return {
-            'text': self.tokenizer(
+        return (
+            self.tokenizer(
                 item['text'],
                 padding='max_length',
                 truncation=True,
                 return_tensors='pt'
             )['input_ids'].squeeze(),
-            'label': item['label']
-        }
+            item['label']
+        )
