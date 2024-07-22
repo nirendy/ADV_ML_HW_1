@@ -6,7 +6,7 @@ torchtext
 datasets
 einops
 jupyterlab
-protobuf~=4.25
+protobuf
 tensorflow
 tensorflow_datasets
 protobuf
