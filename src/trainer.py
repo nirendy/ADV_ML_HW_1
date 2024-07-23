@@ -5,6 +5,8 @@ import random
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from typing import Tuple
+from typing import TypedDict
 
 import numpy as np
 import torch
@@ -36,6 +38,15 @@ def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = DDP.MASTER_ADDR
     os.environ['MASTER_PORT'] = DDP.MASTER_PORT
     dist.init_process_group(DDP.BACKEND, rank=rank, world_size=world_size)
+
+
+class Checkpoint(TypedDict):
+    epoch: int
+    step: int
+    model_state_dict: Dict[str, Any]
+    optimizer_state_dict: Dict[str, Any]
+    best_loss: float
+    during_pretraining: bool
 
 
 class Trainer:
@@ -98,11 +109,11 @@ class Trainer:
         with open(path, 'a') as f:
             f.write(msg + '\n')
 
-    def get_loss_fn(self, phase_name: PHASE) -> nn.Module:
+    def get_loss_fn(self, phase_name: PHASE, pad_token_id: int) -> nn.Module:
         if phase_name == PHASE.CLASSIFICATION:
             return nn.CrossEntropyLoss()
         elif phase_name == PHASE.AUTOREGRESSIVE:
-            return nn.CrossEntropyLoss(ignore_index=-1)  # Use ignore_index to ignore padding tokens
+            return nn.CrossEntropyLoss(ignore_index=pad_token_id)  # Use ignore_index to ignore padding tokens
         else:
             raise ValueError(f'Invalid phase name: {phase_name}')
 
@@ -116,33 +127,48 @@ class Trainer:
     ):
         path = PATHS.CHECKPOINTS_DIR / self.relative_path / f'{step}.pth'
         path.parent.mkdir(parents=True, exist_ok=True)
-        checkpoint = {
-            'epoch': epoch,
-            'step': step,
-            'model_state_dict': architecture.model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'best_loss': self.best_loss,
-            'during_pretraining': during_pretraining
-        }
+        checkpoint = Checkpoint(
+            epoch=epoch,
+            step=step,
+            model_state_dict=architecture.model.state_dict(),
+            optimizer_state_dict=optimizer.state_dict(),
+            best_loss=self.best_loss,
+            during_pretraining=during_pretraining
+        )
         torch.save(checkpoint, path)
 
         self.logger.info(f"Checkpoint saved at {path}")
 
-    def load_checkpoint(self, path: Path, architecture: Architecture, optimizer: optim.Optimizer):
+    def load_checkpoint(self) -> Optional[Checkpoint]:
+        if (checkpoint_path := self.get_latest_chkpt()) is not None:
+            checkpoint = torch.load(checkpoint_path)
+            return checkpoint
+
+    def load_checkpoint_old(self, path: Path, architecture: Architecture) -> Tuple[
+        optim.Optimizer,
+        Architecture,
+        int,  # epoch
+        int,  # step
+        bool,  # during_pretraining
+    ]:
         if path.exists():
             checkpoint = torch.load(path)
+            during_pretraining = checkpoint['during_pretraining']
+            optimizer = self.get_optimizer(architecture.model).load_state_dict(checkpoint['optimizer_state_dict'])
+            architecture.initialize_model()
+            if during_pretraining:
+                pass
+            else:
+                pass
+
+            step = int(path.stem)
+
             architecture.model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.best_loss = checkpoint['best_loss']
             self.logger.info(f"Checkpoint loaded from {path}")
             return checkpoint['epoch'], checkpoint['during_pretraining']
-        else:
-            self.logger.info(f"No checkpoint found at {path}")
-            return 0
-
-    @property
-    def is_pretraining(self) -> bool:
-        return self._pretrain_dataset is not None
+        assert False, f"Checkpoint not found at {path}"
 
     @property
     def rank(self) -> int:
@@ -164,6 +190,7 @@ class Trainer:
         return optim.Adam(model.parameters(), lr=self.training_config['learning_rate'])
 
     def train_and_evaluate_model(self, rank=0, world_size=1) -> Dict[str, Any]:
+        set_seed(self.training_config['seed'])
         self._rank = rank or 0
         self._world_size = world_size or 1
 
@@ -174,72 +201,63 @@ class Trainer:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.configure_logging()
 
-        architecture = get_arch_by_name(self._arch_name)(self.arch_config)
-        pretrain_dataset = (
-            get_dataset_by_name(self._pretrain_dataset)(PHASE.AUTOREGRESSIVE)
-            if self.is_pretraining
-            else None
-        )
-        finetune_dataset = get_dataset_by_name(self._finetune_dataset)(PHASE.CLASSIFICATION)
         writer = SummaryWriter(log_dir=str(PATHS.TENSORBOARD_DIR / self.relative_path))
 
-        architecture.initialize_model(dataset=finetune_dataset)
-        self.logger.info(f"params count: {sum(p.numel() for p in architecture.model.parameters())}")
-        if STEPS.PRINT_GRAPH:
-            sample_input_tensor = next(iter(finetune_dataset.get_train_dataset()))[0].unsqueeze(
-                0)  # Adjust based on your dataset's sample shape
-            writer.add_graph(architecture.model, sample_input_tensor)
+        checkpoint = self.load_checkpoint()
 
-        optimizer = None
-        if (checkpoint_path := self.get_latest_chkpt()) is not None:
-            optimizer = self.get_optimizer(architecture.model)
-            epoch, during_pretraining = (
-                self.load_checkpoint(checkpoint_path, architecture, optimizer)
-            )
-            step = int(checkpoint_path.stem)
-        else:
-            epoch = 0
-            step = 0
-            during_pretraining = self.is_pretraining
-
-        architecture.model.to(device)
-        # Set random seeds for reproducibility
-        set_seed(self.training_config['seed'])
-
-        if during_pretraining:
+        if (
+                (checkpoint is not None and checkpoint['during_pretraining'])
+                or self._pretrain_dataset is not None
+        ):
             self._train_model(
-                architecture=architecture,
-                dataset_wrapper=pretrain_dataset,
+                phase_name=PHASE.AUTOREGRESSIVE,
+                checkpoint=checkpoint,
                 writer=writer,
                 device=device,
-                start_epoch=epoch,
-                step=step
             )
-            step = 0
-            optimizer = None
-        self._train_model(
-            architecture=architecture,
-            dataset_wrapper=finetune_dataset,
+            checkpoint = None
+        metrics = self._train_model(
+            phase_name=PHASE.CLASSIFICATION,
+            checkpoint=checkpoint,
             writer=writer,
-            optimizer=optimizer,
             device=device,
-            start_epoch=epoch,
-            step=step
         )
 
-        metrics = self._evaluate_model(architecture, finetune_dataset, SPLIT.TEST, device)
         return metrics
 
     def _train_model(
-            self, architecture: Architecture,
-            dataset_wrapper: BaseDataset,
+            self,
+            phase_name: PHASE,
+            checkpoint: Optional[Checkpoint],
             writer: SummaryWriter,
-            optimizer: Optional[optim.Optimizer],
             device: torch.device,
-            start_epoch: int,
-            step: int
-    ) -> None:
+    ) -> Dict[str, float]:
+        if phase_name == PHASE.CLASSIFICATION:
+            dataset_wrapper = get_dataset_by_name(self._finetune_dataset)(phase_name)
+        elif phase_name == PHASE.AUTOREGRESSIVE:
+            dataset_wrapper = get_dataset_by_name(self._pretrain_dataset)(phase_name)
+        else:
+            raise ValueError(f'Invalid phase name: {phase_name}')
         dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN)
+        architecture = get_arch_by_name(self._arch_name)(self.arch_config)
+        architecture.initialize_model(dataset_wrapper)
+        optimizer = self.get_optimizer(architecture.model)
+        start_epoch = 0
+        step = 0
+        self.logger.info(f"Training {phase_name} phase")
+
+        if checkpoint is not None:
+            architecture.model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch']
+            step = checkpoint['step']
+            self.best_loss = checkpoint['best_loss']
+            self.logger.info(f"Checkpoint loaded")
+        self.logger.info(f"params count: {architecture.param_count}")
+        if STEPS.PRINT_GRAPH and self.is_master_process:
+            sample_input_tensor = next(iter(dataset))[0].unsqueeze(0)
+            writer.add_graph(architecture.model, sample_input_tensor)
+
         if self.is_distributed:
             sampler = DistributedSampler(
                 dataset,
@@ -253,6 +271,7 @@ class Trainer:
                 batch_size=self.training_config['batch_size'],
                 sampler=sampler,
                 num_workers=DDP.NUM_WORKERS,
+                worker_init_fn=lambda x: set_seed(self.training_config['seed']),
                 # collate_fn=dataset.collate_fn
             )
         else:
@@ -262,10 +281,10 @@ class Trainer:
                 shuffle=True
             )
 
-        if optimizer is None:
-            optimizer = self.get_optimizer(architecture.model)
-        loss_fn = self.get_loss_fn(dataset_wrapper.phase_name)
+        loss_fn = self.get_loss_fn(dataset_wrapper.phase_name, dataset_wrapper.tokenizer.pad_token_id)
+        architecture.model.to(device)
         architecture.model.train()
+        metrics = {}
         for epoch in range(start_epoch, self.training_config['epochs']):
             for i, data in enumerate(data_loader):
                 inputs, labels = data
@@ -276,10 +295,7 @@ class Trainer:
                 if dataset_wrapper.phase_name == PHASE.CLASSIFICATION:
                     loss = loss_fn(outputs, labels)
                 elif dataset_wrapper.phase_name == PHASE.AUTOREGRESSIVE:
-                    # Shift inputs to create target for next token prediction
-                    targets = inputs[:, 1:].contiguous().view(-1)
-                    outputs = outputs[:, :-1].contiguous().view(-1, outputs.size(-1))
-                    loss = loss_fn(outputs, targets)
+                    loss = loss_fn(outputs.view(-1, outputs.size(-1)), labels.view(-1))
                 else:
                     raise ValueError(f'Invalid phase name: {dataset_wrapper.phase_name}')
 
@@ -326,6 +342,7 @@ class Trainer:
                                 step,
                             )
                         self.logger.info(f'Test Metrics: {metrics}')
+        return metrics
 
     def _evaluate_model(
             self,
@@ -342,7 +359,7 @@ class Trainer:
         test_loss = 0
         correct = 0
         total = 0
-        loss_fn = self.get_loss_fn(PHASE.CLASSIFICATION)
+        loss_fn = self.get_loss_fn(PHASE.CLASSIFICATION, dataset.tokenizer.pad_token_id)
         with torch.no_grad():
             for data in data_loader:
                 inputs, labels = data
@@ -352,6 +369,7 @@ class Trainer:
                 test_loss += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
+                # noinspection PyUnresolvedReferences
                 correct += (predicted == labels).sum().item()
         accuracy = 100 * correct / total
         return {'Test Loss': test_loss / len(data_loader), 'Test Accuracy': accuracy}

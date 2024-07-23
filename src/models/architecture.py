@@ -24,6 +24,11 @@ class Architecture(ABC):
         """Initialize the model architecture."""
         pass
 
+    @property
+    def param_count(self) -> int:
+        """Return the number of parameters in the model."""
+        return sum(p.numel() for p in self.model.parameters())
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model."""
         return self.model(x)

@@ -14,6 +14,7 @@
 #SBATCH --account=gpu-research # billing account
 
 nvidia-smi
+gpustat --no-color -pfu
 
 # Activate the conda environment
 source /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/venv/bin/activate
