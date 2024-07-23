@@ -23,8 +23,8 @@ config = Config(
     ),
     training=TrainingConfig(
         batch_size=32,
-        learning_rate=0.05,
+        learning_rate=0.001,
         epochs=40,
-        seed=42
+        seed=42,
     ),
 )

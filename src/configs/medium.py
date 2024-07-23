@@ -12,9 +12,9 @@ config = Config(
     ),
     transformer=TransformerConfig(
         d_model=256,
-        num_heads=2,
-        num_layers=4,
-        dim_feedforward=1024,
+        num_heads=4,
+        num_layers=2,
+        dim_feedforward=512,
     ),
     s4=S4Config(
         d_model=256,

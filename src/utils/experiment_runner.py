@@ -11,6 +11,7 @@ from src.models.lstm import LSTMArchitecture
 from src.models.s4 import S4Architecture
 from src.models.s4_copy import S4CopyArchitecture
 from src.models.transformer import TransformerArchitecture
+from src.models.transformer_copy import TransformerCopyArchitecture
 from src.types import ARCH
 from src.types import CONFIG_KEYS
 from src.types import DATASET
@@ -68,6 +69,8 @@ def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
         return LSTMArchitecture
     elif arch_name == ARCH.TRANSFORMER:
         return TransformerArchitecture
+    elif arch_name == ARCH.TRANSFORMER_COPY:
+        return TransformerCopyArchitecture
     elif arch_name == ARCH.S4:
         return S4Architecture
     elif arch_name == ARCH.S4_COPY:
@@ -79,7 +82,7 @@ def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
 def get_config_name_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
     if arch_name == ARCH.LSTM:
         return CONFIG_KEYS.LSTM
-    elif arch_name == ARCH.TRANSFORMER:
+    elif arch_name == ARCH.TRANSFORMER or arch_name == ARCH.TRANSFORMER_COPY:
         return CONFIG_KEYS.TRANSFORMER
     elif arch_name == ARCH.S4 or arch_name == ARCH.S4_COPY:
         return CONFIG_KEYS.S4

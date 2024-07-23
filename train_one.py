@@ -96,7 +96,7 @@ def main_medium(is_parallel: bool, run_id=None):
     main(
         args=(
             'medium',
-            ARCH.S4_COPY,
+            ARCH.TRANSFORMER,
             DATASET.IMDB,
             None,
             run_id,
@@ -109,10 +109,11 @@ def main_medium(is_parallel: bool, run_id=None):
 if __name__ == '__main__':
     set_seed(42)
 
-    main_parser()
+    # main_parser()
     # main_small()
     # main_small('20240722_14-47-44')
     # main_medium(is_parallel=True, run_id=None)
+    main_medium(is_parallel=False, run_id=None)
 
     # train_one(
     #     'small', ARCH.LSTM, DATASET.LISTOPS, None,
