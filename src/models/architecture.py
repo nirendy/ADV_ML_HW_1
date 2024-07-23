@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 
 from src.datasets.base_dataset import BaseDataset
+from src.types import ARCH
+from src.types import CONFIG_KEYS
 
 
 class Architecture(ABC):
@@ -18,6 +20,10 @@ class Architecture(ABC):
         self.model_config = config
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
+
+    @staticmethod
+    def arch_to_config_override(arch: ARCH) -> CONFIG_KEYS:
+        return arch
 
     @abstractmethod
     def initialize_model(self, dataset: BaseDataset) -> None:

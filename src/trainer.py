@@ -13,6 +13,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
+from src.consts import DDP
 from src.consts import FORMATS
 from src.consts import PATHS
 from src.types import ARCH
@@ -24,8 +25,17 @@ from src.consts import STEPS
 from src.datasets.base_dataset import BaseDataset
 from src.models.architecture import Architecture
 from src.utils.experiment_runner import get_arch_by_name
+from src.utils.experiment_runner import get_config_name_by_arch
 from src.utils.experiment_runner import get_dataset_by_name
 from src.utils.experiment_runner import load_config
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = DDP.MASTER_ADDR
+    os.environ['MASTER_PORT'] = DDP.MASTER_PORT
+    dist.init_process_group(DDP.BACKEND, rank=rank, world_size=world_size)
 
 
 class Trainer:
@@ -47,14 +57,20 @@ class Trainer:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
 
-        (PATHS.LOGS_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
-        self.logger.addHandler(logging.FileHandler(PATHS.LOGS_DIR / self.relative_path / f'{self._run_id}.log'))
-        self.logger.addHandler(logging.StreamHandler())
         self.best_loss = float('inf')
+
+    def configure_logging(self):
+        (PATHS.LOGS_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
+        if self.is_master_process:
+            self.logger.addHandler(logging.StreamHandler())
+            self.logger.addHandler(logging.FileHandler(PATHS.LOGS_DIR / self.relative_path / f'{self._run_id}.log'))
+            self.dump_config()
+        else:
+            self.logger.addHandler(logging.NullHandler())
 
     @property
     def arch_config(self) -> Dict[str, Any]:
-        return self._config.get(self._arch_name.value)
+        return self._config.get(get_config_name_by_arch(self._arch_name).value)
 
     @property
     def relative_path(self) -> str:
@@ -71,10 +87,10 @@ class Trainer:
         return self._config['training']
 
     def dump_config(self):
-        path = PATHS.LOGS_DIR / self.relative_path
+        path = PATHS.LOGS_DIR / self.relative_path / f'config_{time.strftime(FORMATS.TIME)}.json'
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
-            json.dump(self._config, f)
+            json.dump(self._config, f, indent=4)
 
     def log(self, msg: str):
         path = PATHS.LOGS_DIR / self.relative_path
@@ -128,8 +144,33 @@ class Trainer:
     def is_pretraining(self) -> bool:
         return self._pretrain_dataset is not None
 
-    def train_and_evaluate_model(self) -> Dict[str, Any]:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    @property
+    def rank(self) -> int:
+        return self._rank
+
+    @property
+    def world_size(self) -> int:
+        return self._world_size
+
+    @property
+    def is_master_process(self) -> bool:
+        return self._rank == 0
+
+    @property
+    def is_distributed(self) -> bool:
+        return self._world_size > 1
+
+    def train_and_evaluate_model(self, rank=0, world_size=1) -> Dict[str, Any]:
+        self._rank = rank or 0
+        self._world_size = world_size or 1
+
+        if self.is_distributed:
+            setup(rank, world_size)
+            device = torch.device(rank)
+        else:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.configure_logging()
+
         architecture = get_arch_by_name(self._arch_name)(self.arch_config)
         pretrain_dataset = (
             get_dataset_by_name(self._pretrain_dataset)(PHASE.AUTOREGRESSIVE)
@@ -157,7 +198,7 @@ class Trainer:
         if during_pretraining:
             self._train_model(
                 architecture=architecture,
-                dataset=pretrain_dataset,
+                dataset_wrapper=pretrain_dataset,
                 writer=writer,
                 device=device,
                 start_epoch=epoch,
@@ -166,29 +207,47 @@ class Trainer:
             step = 0
         self._train_model(
             architecture=architecture,
-            dataset=finetune_dataset,
+            dataset_wrapper=finetune_dataset,
             writer=writer,
             device=device,
             start_epoch=epoch,
             step=step
         )
 
-        metrics = self._evaluate_model(architecture, finetune_dataset, SPLIT.TEST)
+        metrics = self._evaluate_model(architecture, finetune_dataset, SPLIT.TEST, device)
         return metrics
 
     def _train_model(
-            self, architecture: Architecture, dataset: BaseDataset, writer: SummaryWriter,
+            self, architecture: Architecture, dataset_wrapper: BaseDataset, writer: SummaryWriter,
             device: torch.device,
             start_epoch: int,
             step: int
     ) -> None:
-        data_loader = DataLoader(
-            dataset.get_dataset(SPLIT.TRAIN),
-            batch_size=self.training_config['batch_size'],
-            shuffle=True
-        )
+        dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN)
+        if self.is_distributed:
+            sampler = DistributedSampler(
+                dataset,
+                num_replicas=self.world_size,
+                rank=self.rank,
+                shuffle=DDP.SHUFFLE,
+                drop_last=DDP.DROP_LAST
+            )
+            data_loader = DataLoader(
+                dataset,
+                batch_size=self.training_config['batch_size'],
+                sampler=sampler,
+                num_workers=DDP.NUM_WORKERS,
+                # collate_fn=dataset.collate_fn
+            )
+        else:
+            data_loader = DataLoader(
+                dataset,
+                batch_size=self.training_config['batch_size'],
+                shuffle=True
+            )
+
         optimizer = optim.Adam(architecture.model.parameters(), lr=self.training_config['learning_rate'])
-        loss_fn = self.get_loss_fn(dataset.phase_name)
+        loss_fn = self.get_loss_fn(dataset_wrapper.phase_name)
         architecture.model.train()
         for epoch in range(start_epoch, self.training_config['epochs']):
             for i, data in enumerate(data_loader):
@@ -197,59 +256,67 @@ class Trainer:
                 optimizer.zero_grad()
                 outputs = architecture.forward(inputs)
 
-                if dataset.phase_name == PHASE.CLASSIFICATION:
+                if dataset_wrapper.phase_name == PHASE.CLASSIFICATION:
                     loss = loss_fn(outputs, labels)
-                elif dataset.phase_name == PHASE.AUTOREGRESSIVE:
+                elif dataset_wrapper.phase_name == PHASE.AUTOREGRESSIVE:
                     # Shift inputs to create target for next token prediction
                     targets = inputs[:, 1:].contiguous().view(-1)
                     outputs = outputs[:, :-1].contiguous().view(-1, outputs.size(-1))
                     loss = loss_fn(outputs, targets)
                 else:
-                    raise ValueError(f'Invalid phase name: {dataset.phase_name}')
+                    raise ValueError(f'Invalid phase name: {dataset_wrapper.phase_name}')
 
                 loss.backward()
                 optimizer.step()
                 step += 1
 
-                # Log the training loss
-                if step % STEPS.LOG_STEP == 0:
-                    writer.add_scalar(
-                        '/'.join([
-                            self.relative_path,
-                            self._run_id,
-                            dataset.phase_name,
-                            'Loss'
-                        ]),
-                        loss.item(),
-                        step
-                    )
-                    self.best_loss = min(self.best_loss, loss.item())
-                    self.logger.info(
-                        f'{dataset.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
-                        f'Step [{step}/{len(data_loader)}], Loss: {loss.item():.4f}'
-                    )
-
-                if step >= STEPS.WARMUP_STEPS and step % STEPS.SAVE_STEP == 0:
-                    self.save_checkpoint(
-                        architecture, optimizer, epoch,
-                        step=step,
-                        during_pretraining=dataset.phase_name == PHASE.AUTOREGRESSIVE
-                    )
-                if step >= STEPS.WARMUP_STEPS and step % STEPS.EVAL_STEP == 0:
-                    metrics = self._evaluate_model(architecture, dataset, SPLIT.TEST)
-                    for key, value in metrics.items():
+                if self.is_master_process:
+                    # Log the training loss
+                    if step % STEPS.LOG_STEP == 0:
                         writer.add_scalar(
                             '/'.join([
                                 self.relative_path,
                                 self._run_id,
-                                dataset.phase_name,
-                                key
+                                dataset_wrapper.phase_name,
+                                'Loss'
                             ]),
-                            value,
-                            step,
+                            loss.item(),
+                            step
+                        )
+                        self.best_loss = min(self.best_loss, loss.item())
+                        self.logger.info(
+                            f'{dataset_wrapper.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
+                            f'Step [{step}/{len(data_loader)}], Loss: {loss.item():.4f}'
                         )
 
-    def _evaluate_model(self, architecture: Architecture, dataset: BaseDataset, split: SPLIT) -> Dict[str, float]:
+                    if step >= STEPS.WARMUP_STEPS and step % STEPS.SAVE_STEP == 0:
+                        self.save_checkpoint(
+                            architecture, optimizer, epoch,
+                            step=step,
+                            during_pretraining=dataset_wrapper.phase_name == PHASE.AUTOREGRESSIVE
+                        )
+                    if step >= STEPS.WARMUP_STEPS and step % STEPS.EVAL_STEP == 0:
+                        metrics = self._evaluate_model(architecture, dataset_wrapper, SPLIT.TEST, device)
+                        for key, value in metrics.items():
+                            writer.add_scalar(
+                                '/'.join([
+                                    self.relative_path,
+                                    self._run_id,
+                                    dataset_wrapper.phase_name,
+                                    key
+                                ]),
+                                value,
+                                step,
+                            )
+                        self.logger.info(f'Test Metrics: {metrics}')
+
+    def _evaluate_model(
+            self,
+            architecture: Architecture,
+            dataset: BaseDataset,
+            split: SPLIT,
+            device: torch.device,
+    ) -> Dict[str, float]:
         data_loader = DataLoader(
             dataset.get_dataset(split),
             batch_size=self.training_config['batch_size']
@@ -262,6 +329,7 @@ class Trainer:
         with torch.no_grad():
             for data in data_loader:
                 inputs, labels = data
+                inputs, labels = inputs.to(device), labels.to(device)
                 outputs = architecture.forward(inputs)
                 loss = loss_fn(outputs, labels)
                 test_loss += loss.item()

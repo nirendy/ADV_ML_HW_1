@@ -5,6 +5,7 @@ import numpy as np
 from numpy.linalg import matrix_power, inv
 from src.datasets.base_dataset import BaseDataset
 from src.models.architecture import Architecture
+from src.types import CONFIG_KEYS
 from src.utils.config_types import S4Config
 
 """Minimal version of S4D with extra options and features stripped out, for pedagogical purposes."""
@@ -113,6 +114,10 @@ class S4D(nn.Module):
 
 class S4CopyArchitecture(Architecture):
     model_config: S4Config
+
+    @staticmethod
+    def arch_to_config_override(arch: str) -> CONFIG_KEYS:
+        return CONFIG_KEYS.S4
 
     def initialize_model(self, dataset: BaseDataset) -> None:
         """

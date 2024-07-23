@@ -31,10 +31,19 @@ class DATASETS_CONSTANTS:
 
 class STEPS:
     WARMUP_STEPS = 20
-    SAVE_STEP = 10
-    LOG_STEP = 10
+    SAVE_STEP = 500
+    LOG_STEP = 50
     EVAL_STEP = 1000
 
 
 class FORMATS:
     TIME = "%Y%m%d_%H-%M-%S"
+
+
+class DDP:
+    MASTER_PORT = '12355'
+    MASTER_ADDR = 'localhost'
+    BACKEND = 'nccl'
+    SHUFFLE = True
+    DROP_LAST = True
+    NUM_WORKERS = 0

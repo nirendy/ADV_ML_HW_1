@@ -1,6 +1,6 @@
 import importlib
 from typing import Type
-from typing import assert_never
+from typing_extensions import assert_never
 
 from src.datasets.base_dataset import BaseDataset
 from src.datasets.imdb_lra_dataset import IMDBlraDataset
@@ -12,6 +12,7 @@ from src.models.s4 import S4Architecture
 from src.models.s4_copy import S4CopyArchitecture
 from src.models.transformer import TransformerArchitecture
 from src.types import ARCH
+from src.types import CONFIG_KEYS
 from src.types import DATASET
 from src.types import IConfigName
 from src.utils.config_types import Config
@@ -73,6 +74,16 @@ def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
         return S4CopyArchitecture
     else:
         raise ValueError(f'Invalid architecture name: {arch_name}')
+
+
+def get_config_name_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
+    if arch_name == ARCH.LSTM:
+        return CONFIG_KEYS.LSTM
+    elif arch_name == ARCH.TRANSFORMER:
+        return CONFIG_KEYS.TRANSFORMER
+    elif arch_name == ARCH.S4 or arch_name == ARCH.S4_COPY:
+        return CONFIG_KEYS.S4
+    assert_never(arch_name)
 
 
 def get_dataset_by_name(dataset_name: DATASET) -> Type[BaseDataset]:
