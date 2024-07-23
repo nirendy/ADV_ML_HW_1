@@ -160,6 +160,9 @@ class Trainer:
     def is_distributed(self) -> bool:
         return self._world_size > 1
 
+    def get_optimizer(self, model: torch.nn.Module) -> optim.Optimizer:
+        return optim.Adam(model.parameters(), lr=self.training_config['learning_rate'])
+
     def train_and_evaluate_model(self, rank=0, world_size=1) -> Dict[str, Any]:
         self._rank = rank or 0
         self._world_size = world_size or 1
@@ -181,9 +184,17 @@ class Trainer:
         writer = SummaryWriter(log_dir=str(PATHS.TENSORBOARD_DIR / self.relative_path))
 
         architecture.initialize_model(dataset=finetune_dataset)
+        self.logger.info(f"params count: {sum(p.numel() for p in architecture.model.parameters())}")
+        if STEPS.PRINT_GRAPH:
+            sample_input_tensor = next(iter(finetune_dataset.get_train_dataset()))[0].unsqueeze(
+                0)  # Adjust based on your dataset's sample shape
+            writer.add_graph(architecture.model, sample_input_tensor)
+
+        optimizer = None
         if (checkpoint_path := self.get_latest_chkpt()) is not None:
+            optimizer = self.get_optimizer(architecture.model)
             epoch, during_pretraining = (
-                self.load_checkpoint(checkpoint_path, architecture, optim.Adam(architecture.model.parameters()))
+                self.load_checkpoint(checkpoint_path, architecture, optimizer)
             )
             step = int(checkpoint_path.stem)
         else:
@@ -205,10 +216,12 @@ class Trainer:
                 step=step
             )
             step = 0
+            optimizer = None
         self._train_model(
             architecture=architecture,
             dataset_wrapper=finetune_dataset,
             writer=writer,
+            optimizer=optimizer,
             device=device,
             start_epoch=epoch,
             step=step
@@ -218,7 +231,10 @@ class Trainer:
         return metrics
 
     def _train_model(
-            self, architecture: Architecture, dataset_wrapper: BaseDataset, writer: SummaryWriter,
+            self, architecture: Architecture,
+            dataset_wrapper: BaseDataset,
+            writer: SummaryWriter,
+            optimizer: Optional[optim.Optimizer],
             device: torch.device,
             start_epoch: int,
             step: int
@@ -246,7 +262,8 @@ class Trainer:
                 shuffle=True
             )
 
-        optimizer = optim.Adam(architecture.model.parameters(), lr=self.training_config['learning_rate'])
+        if optimizer is None:
+            optimizer = self.get_optimizer(architecture.model)
         loss_fn = self.get_loss_fn(dataset_wrapper.phase_name)
         architecture.model.train()
         for epoch in range(start_epoch, self.training_config['epochs']):

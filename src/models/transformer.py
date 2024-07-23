@@ -93,29 +93,44 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0), :]
 
 
+class TransformerModel(nn.Module):
+    def __init__(self, vocab_size: int, d_model: int, num_layers: int, num_heads: int, d_ff: int, num_classes: int):
+        super(TransformerModel, self).__init__()
+        self._vocab_size = vocab_size
+        self._d_model = d_model
+        self._num_layers = num_layers
+        self._num_heads = num_heads
+        self._d_ff = d_ff
+        self._num_classes = num_classes
+
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model)
+        self.transformer_blocks = nn.ModuleList([
+            TransformerBlock(d_model, num_heads, d_ff) for _ in range(num_layers)
+        ])
+        self.fc = nn.Linear(d_model, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        embedded = self.embedding(x)
+        x = self.positional_encoding(embedded.permute(1, 0, 2))
+
+        for transformer_block in self.transformer_blocks:
+            x = transformer_block(x)
+
+        x = x.permute(1, 0, 2)
+        output = self.fc(x[:, 0, :])
+        return output
+
+
 class TransformerArchitecture(Architecture):
     model_config: TransformerConfig
 
     def initialize_model(self, dataset: BaseDataset) -> None:
-        self.model = nn.Module()
-        self.model.embedding = nn.Embedding(dataset.vocab_size, self.model_config['d_model'])
-        self.model.positional_encoding = PositionalEncoding(self.model_config['d_model'])
-        self.model.transformer_blocks = nn.ModuleList([
-            TransformerBlock(
-                self.model_config['d_model'], self.model_config['num_heads'], self.model_config['dim_feedforward']
-            )
-            for _ in range(self.model_config['num_layers'])
-        ]
+        self.model = TransformerModel(
+            vocab_size=dataset.vocab_size,
+            d_model=self.model_config['d_model'],
+            num_layers=self.model_config['num_layers'],
+            num_heads=self.model_config['num_heads'],
+            d_ff=self.model_config['dim_feedforward'],
+            num_classes=dataset.num_classes,
         )
-        self.model.fc = nn.Linear(self.model_config['d_model'], dataset.num_classes)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        embedded = self.model.embedding(x)
-        x = self.model.positional_encoding(embedded.permute(1, 0, 2))
-
-        for transformer_block in self.model.transformer_blocks:
-            x = transformer_block(x)
-
-        x = x.permute(1, 0, 2)  # Back to (batch_size, seq_len, d_model)
-        output = self.model.fc(x[:, 0, :])  # Taking the output of the first token (classification task)
-        return output

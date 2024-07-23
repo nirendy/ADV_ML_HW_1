@@ -80,7 +80,10 @@ def main_small(run_id=None):
     main(
         args=(
             'small',
-            ARCH.LSTM,
+            # ARCH.S4,
+            # ARCH.S4_COPY,
+            # ARCH.LSTM,
+            ARCH.TRANSFORMER,
             DATASET.LISTOPS,
             None,
             run_id

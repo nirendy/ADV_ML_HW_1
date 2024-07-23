@@ -28,7 +28,8 @@ class S4Layer(nn.Module):
             self.K = self.compute_kernel(self.A.numpy(), self.B.numpy(), self.C.numpy(), self.L)
             self.K = torch.tensor(self.K, dtype=torch.float32)
 
-    def discretize(self, A: np.ndarray, B: np.ndarray, C: np.ndarray, step: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def discretize(self, A: np.ndarray, B: np.ndarray, C: np.ndarray, step: float) -> Tuple[
+        np.ndarray, np.ndarray, np.ndarray]:
         """
         Discretize the state-space matrices using bilinear (Tustin) transform.
         """
@@ -48,7 +49,7 @@ class S4Layer(nn.Module):
         Returns K: (L,)
         """
         return np.array([
-            (Cb @ matrix_power(Ab, l) @ Bb).item() # (1, 1) = (1, N) @ (N, N)^l @ (N, 1)
+            (Cb @ matrix_power(Ab, l) @ Bb).item()  # (1, 1) = (1, N) @ (N, N)^l @ (N, 1)
             for l in range(L)
         ])  # => (L,)
 
@@ -60,12 +61,14 @@ class S4Layer(nn.Module):
         """
         batch_size, L, d_model = u.shape
         u = u.view(batch_size * d_model, L)  # (batch_size * d_model, L)
-        u_padded = np.pad(u.cpu().detach().numpy(), ((0, 0), (0, self.K.shape[0])), 'constant')  # (batch_size * d_model, L + K)
+        u_padded = np.pad(u.cpu().detach().numpy(), ((0, 0), (0, self.K.shape[0])),
+                          'constant')  # (batch_size * d_model, L + K)
         u_fft = np.fft.rfft(u_padded)  # (batch_size * d_model, L + K)
         K_padded = np.pad(self.K.cpu().detach().numpy(), (0, u_fft.shape[1] - self.K.shape[0]), 'constant')  # (L + K,)
         K_fft = np.fft.rfft(K_padded)  # (L + K,)
         y = np.fft.irfft(u_fft * K_fft)[:, :L]  # (batch_size * d_model, L)
-        y = torch.tensor(y, dtype=u.dtype, device=u.device).view(batch_size, d_model, L).permute(0, 2, 1)  # (batch_size * d_model, L) => (batch_size, L, d_model)
+        y = torch.tensor(y, dtype=u.dtype, device=u.device).view(batch_size, d_model, L).permute(0, 2,
+                                                                                                 1)  # (batch_size * d_model, L) => (batch_size, L, d_model)
         return y
 
     def forward_regressive(self, u: torch.Tensor) -> torch.Tensor:
@@ -85,14 +88,17 @@ class S4Layer(nn.Module):
             Returns x_k: (batch_size * d_model, N)
             y_k: (batch_size * d_model,)
             """
-            x_k = self.A @ x_k_1.T + self.B @ u_k.unsqueeze(-1).T  # (N, batch_size * d_model) = (N, N) @ (batch_size * d_model, N).T + (N, 1) @ (batch_size * d_model, 1).T
+            x_k = self.A @ x_k_1.T + self.B @ u_k.unsqueeze(
+                -1).T  # (N, batch_size * d_model) = (N, N) @ (batch_size * d_model, N).T + (N, 1) @ (batch_size * d_model, 1).T
             y_k = self.C @ x_k  # (1, batch_size * d_model) = (1, N) @ (N, batch_size * d_model)
             return x_k.T, y_k.T  # (batch_size * d_model, N), (batch_size * d_model,)
 
-        x_k_1 = torch.zeros((batch_size * d_model, self.A.shape[0]), dtype=u.dtype, device=u.device)  # (batch_size * d_model, N)
+        x_k_1 = torch.zeros((batch_size * d_model, self.A.shape[0]), dtype=u.dtype,
+                            device=u.device)  # (batch_size * d_model, N)
         ys = []
         for u_k in u.T:  # Iterate over time steps
-            x_k_1, y_k = step(x_k_1, u_k)  # x_k_1: (batch_size * d_model, N), u_k: (batch_size * d_model,) => x_k: (batch_size * d_model, N), y_k: (batch_size * d_model,)
+            x_k_1, y_k = step(x_k_1,
+                              u_k)  # x_k_1: (batch_size * d_model, N), u_k: (batch_size * d_model,) => x_k: (batch_size * d_model, N), y_k: (batch_size * d_model,)
             ys.append(y_k)
 
         ys = torch.stack(ys, dim=1)  # (batch_size * d_model, L)
@@ -111,30 +117,32 @@ class S4Layer(nn.Module):
             return self.forward_regressive(u)
 
 
-class S4Architecture(Architecture):
-    model_config: S4Config
+class S4Model(nn.Module):
+    def __init__(self, vocab_size: int, d_model: int, state_size: int, num_layers: int, num_classes: int):
+        super(S4Model, self).__init__()
+        self._vocab_size = vocab_size
+        self._d_model = d_model
+        self._state_size = state_size
+        self._num_layers = num_layers
+        self._num_classes = num_classes
 
-    def initialize_model(self, dataset: BaseDataset) -> None:
-        """
-        Initializes the S4 model.
-        """
-        self.model = nn.Module()
-        self.model.embedding = nn.Embedding(dataset.vocab_size, self.model_config['d_model'])  # (vocab_size, d_model)
-        self.model.s4_layers = nn.ModuleList(
-            [S4Layer(self.make_A(self.model_config['state_size']),
-                     np.random.randn(self.model_config['state_size'], 1),  # (N, 1)
-                     np.random.randn(1, self.model_config['state_size']),  # (1, N)
+        self.embedding = nn.Embedding(vocab_size, d_model)  # (vocab_size, d_model)
+        self.s4_layers = nn.ModuleList(
+            [S4Layer(self.make_A(state_size),
+                     np.random.randn(state_size, 1),  # (N, 1)
+                     np.random.randn(1, state_size),  # (1, N)
                      L=100,  # Sequence length
                      kernel_method=False)
-             for _ in range(self.model_config['num_layers'])]
+             for _ in range(num_layers)]
         )
-        self.model.fc = nn.Linear(self.model_config['d_model'], dataset.num_classes)  # (d_model, num_classes)
+        self.fc = nn.Linear(d_model, num_classes)  # (d_model, num_classes)
 
     def make_A(self, N: int) -> np.ndarray:
         """
         Creates the A matrix used in the S4 layer.
         A: (N, N)
         """
+
         def v(n, k):
             if n > k:
                 return np.sqrt(2 * n + 1) * np.sqrt(2 * k + 1)
@@ -142,6 +150,7 @@ class S4Architecture(Architecture):
                 return n + 1
             else:
                 return 0
+
         return -np.array([[v(n, k) for k in range(1, N + 1)] for n in range(1, N + 1)])  # (N, N)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -149,10 +158,26 @@ class S4Architecture(Architecture):
         x: (batch_size, L)
         Returns output: (batch_size, num_classes)
         """
-        embedded = self.model.embedding(x)  # (batch_size, L, d_model)
+        embedded = self.embedding(x)  # (batch_size, L, d_model)
 
-        for layer in self.model.s4_layers:
+        for layer in self.s4_layers:
             embedded = layer(embedded)  # (batch_size, L, d_model)
 
-        output = self.model.fc(embedded[:, 0, :])  # (batch_size, d_model) => (batch_size, num_classes)
+        output = self.fc(embedded[:, 0, :])  # (batch_size, d_model) => (batch_size, num_classes)
         return output
+
+
+class S4Architecture(Architecture):
+    model_config: S4Config
+
+    def initialize_model(self, dataset: BaseDataset) -> None:
+        """
+        Initializes the S4 model.
+        """
+        self.model = S4Model(
+            dataset.vocab_size,
+            self.model_config['d_model'],
+            self.model_config['state_size'],
+            self.model_config['num_layers'],
+            dataset.num_classes
+        )

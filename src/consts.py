@@ -34,6 +34,7 @@ class STEPS:
     SAVE_STEP = 500
     LOG_STEP = 50
     EVAL_STEP = 1000
+    PRINT_GRAPH = False
 
 
 class FORMATS:

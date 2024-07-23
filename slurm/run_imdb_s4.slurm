@@ -1,8 +1,8 @@
 #! /bin/bash
 
 #SBATCH --job-name=imdb_s4 # Job name
-#SBATCH --output=imdb_s4.out # redirect stdout
-#SBATCH --error=imdb_s4.err # redirect stderr
+#SBATCH --output=slurm/logs/imdb_s4.out # redirect stdout
+#SBATCH --error=slurm/logs/imdb_s4.err # redirect stderr
 #SBATCH --partition=gpu-a100-killable # (see resources section)
 #SBATCH --time=1200 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time’s up
@@ -13,7 +13,6 @@
 #SBATCH --gpus=4 # GPUs in total
 #SBATCH --account=gpu-research # billing account
 
-echo $CUDA_VISIBLE_DEVICES
 nvidia-smi
 
 # Activate the conda environment
@@ -31,6 +30,7 @@ BASE=/home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 
 
 # Print diagnostic information
+echo $CUDA_VISIBLE_DEVICES
 echo "Python version: $(python --version)"
 echo "PYTHONPATH: $PYTHONPATH"
 echo $(pwd)
@@ -42,7 +42,11 @@ cd /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 
 
 # Change to the working directory
-python train_one.py  --config_name medium --architecture s4_copy --finetune_dataset imdb --run_id 20240723_00-09-03 --with_parallel True
+python train_one.py  \
+--config_name medium \
+--architecture s4_copy \
+--finetune_dataset imdb \
+--with_parallel True
 
 # Trap keyboard interrupt (Ctrl+C) to end the job
 trap 'echo "Keyboard interrupt received. Ending job."; exit' INT

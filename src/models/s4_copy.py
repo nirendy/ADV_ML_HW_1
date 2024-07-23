@@ -112,37 +112,50 @@ class S4D(nn.Module):
         return y, None  # Return a dummy state to satisfy this repo's interface, but this can be modified
 
 
-class S4CopyArchitecture(Architecture):
-    model_config: S4Config
+class S4Model(nn.Module):
+    def __init__(self, vocab_size: int, d_model: int, state_size: int, num_layers: int, num_classes: int):
+        super(S4Model, self).__init__()
+        self._vocab_size = vocab_size
+        self._d_model = d_model
+        self._state_size = state_size
+        self._num_layers = num_layers
+        self._num_classes = num_classes
 
-    @staticmethod
-    def arch_to_config_override(arch: str) -> CONFIG_KEYS:
-        return CONFIG_KEYS.S4
-
-    def initialize_model(self, dataset: BaseDataset) -> None:
-        """
-        Initializes the S4 model.
-        """
-        self.model = nn.Module()
-        self.model.embedding = nn.Embedding(dataset.vocab_size, self.model_config['d_model'])
-        self.model.s4_layers = nn.ModuleList(
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.s4_layers = nn.ModuleList(
             [
-                S4D(self.model_config['d_model'], self.model_config['state_size'])
-                for _ in range(self.model_config['num_layers'])
+                S4D(d_model, state_size)
+                for _ in range(num_layers)
             ]
         )
-        self.model.fc = nn.Linear(self.model_config['d_model'], dataset.num_classes)  # (d_model, num_classes)
+        self.fc = nn.Linear(d_model, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         x: (batch_size, L)
         Returns output: (batch_size, num_classes)
         """
-        embedded = self.model.embedding(x)  # (batch_size, L, d_model)
+        embedded = self.embedding(x)  # (batch_size, L, d_model)
         embedded = embedded.permute(0, 2, 1)  # (batch_size, d_model, L)
 
-        for layer in self.model.s4_layers:
+        for layer in self.s4_layers:
             embedded, _ = layer(embedded)  # (batch_size, d_model, L)
 
-        output = self.model.fc(embedded[..., 0])  # (batch_size, d_model) => (batch_size, num_classes)
+        output = self.fc(embedded[..., 0])  # (batch_size, d_model) => (batch_size, num_classes)
         return output
+
+
+class S4CopyArchitecture(Architecture):
+    model_config: S4Config
+
+    def initialize_model(self, dataset: BaseDataset) -> None:
+        """
+        Initializes the S4 model.
+        """
+        self.model = S4Model(
+            dataset.vocab_size,
+            self.model_config['d_model'],
+            self.model_config['state_size'],
+            self.model_config['num_layers'],
+            dataset.num_classes
+        )
