@@ -1,12 +1,12 @@
 import torch
 from torch.utils.data import Dataset
 
-from src.datasets.base_dataset import BaseDataset
+from src.datasets.base_dataset import DatasetFactory
 from src.types import PHASE
 from src.types import SPLIT
 
 
-class ListOpsDataset(BaseDataset):
+class ListOpsDatasetFactory(DatasetFactory):
     @property
     def data_dir(self):
         return self.base_data_dir / 'preprocessed' / 'listops-1000'

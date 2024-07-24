@@ -44,8 +44,8 @@ cd /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 
 # Change to the working directory
 python train_one.py  \
---config_name large \
---architecture s4_copy \
+--config_name medium \
+--architecture s4 \
 --finetune_dataset imdb \
 --with_parallel True
 

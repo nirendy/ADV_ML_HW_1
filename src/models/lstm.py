@@ -4,19 +4,19 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from src.datasets.base_dataset import BaseDataset
+from src.datasets.base_dataset import DatasetFactory
 from src.models.architecture import Architecture
 from src.utils.config_types import LSTMConfig
 
 
 class LSTMCell(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int):
+    def __init__(self, d_model: int, hidden_size: int):
         super(LSTMCell, self).__init__()
-        self.input_size = input_size
+        self.d_model = d_model
         self.hidden_size = hidden_size
 
         # Gates: input, forget, cell, output
-        self.i2h = nn.Linear(input_size, 4 * hidden_size)
+        self.i2h = nn.Linear(d_model, 4 * hidden_size)
         self.h2h = nn.Linear(hidden_size, 4 * hidden_size)
 
     def forward(self, x: torch.Tensor, hidden: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[
@@ -37,12 +37,12 @@ class LSTMCell(nn.Module):
 
 
 class LSTMLayer(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int):
+    def __init__(self, d_model: int, hidden_size: int, num_layers: int):
         super(LSTMLayer, self).__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.cells = nn.ModuleList(
-            [LSTMCell(input_size if i == 0 else hidden_size, hidden_size) for i in range(num_layers)])
+            [LSTMCell(d_model if i == 0 else hidden_size, hidden_size) for i in range(num_layers)])
 
     def forward(self, x: torch.Tensor, hidden: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[
         torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
@@ -67,16 +67,16 @@ class LSTMLayer(nn.Module):
 
 
 class LSTM(nn.Module):
-    def __init__(self, vocab_size: int, input_size: int, hidden_size: int, num_layers: int, num_classes: int):
+    def __init__(self, vocab_size: int, d_model: int, hidden_size: int, num_layers: int, num_classes: int):
         super(LSTM, self).__init__()
-        self.input_size = vocab_size
-        self.input_size = input_size
+        self.d_model = vocab_size
+        self.d_model = d_model
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.num_classes = num_classes
 
-        self.embedding = nn.Embedding(vocab_size, input_size)
-        self.lstm = LSTMLayer(input_size, hidden_size, num_layers)
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.lstm = LSTMLayer(d_model, hidden_size, num_layers)
         self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -96,8 +96,8 @@ class LSTM(nn.Module):
 class LSTMArchitecture(Architecture):
     model_config: LSTMConfig
 
-    def initialize_model(self, dataset: BaseDataset) -> None:
+    def initialize_model(self, dataset: DatasetFactory) -> None:
         self.model = LSTM(
-            dataset.vocab_size, self.model_config['input_size'], self.model_config['hidden_size'],
+            dataset.vocab_size, self.model_config['d_model'], self.model_config['hidden_size'],
             self.model_config['num_layers'], dataset.num_classes
         )

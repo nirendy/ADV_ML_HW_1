@@ -5,8 +5,8 @@ from src.types import ARCH
 
 
 class LSTMConfig(TypedDict):
-    input_size: int
-    hidden_size: int
+    d_model: int
+    # hidden_size: int # We enforce d_model == hidden_size, TODO: Fix that
     num_layers: int
 
 

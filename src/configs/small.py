@@ -6,15 +6,15 @@ from src.utils.config_types import TransformerConfig
 
 config = Config(
     lstm=LSTMConfig(
-        input_size=10,
-        hidden_size=20,
+        d_model=16,
+        hidden_size=8,
         num_layers=2
     ),
     transformer=TransformerConfig(
         d_model=16,
         num_heads=2,
         num_layers=3,
-        dim_feedforward=128,
+        dim_feedforward=64,
     ),
     s4=S4Config(
         d_model=16,
@@ -24,7 +24,7 @@ config = Config(
     training=TrainingConfig(
         batch_size=32,
         learning_rate=0.01,
-        epochs=10,
+        epochs=1,
         seed=42
     ),
 )

@@ -2,12 +2,14 @@ import importlib
 from typing import Type
 from typing_extensions import assert_never
 
-from src.datasets.base_dataset import BaseDataset
-from src.datasets.imdb_lra_dataset import IMDBlraDataset
-from src.datasets.listops_dataset import ListOpsDataset
-from src.datasets.wikitext_dataset import WikiTextDataset
+from src.datasets.base_dataset import DatasetFactory
+from src.datasets.imdb_lra_dataset import IMDBlraDatasetFactory
+from src.datasets.listops_dataset import ListOpsDatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
+from src.datasets.wikitext_dataset import WikiTextDatasetFactory
 from src.models.architecture import Architecture
 from src.models.lstm import LSTMArchitecture
+from src.models.lstm_copy import LSTMCopyArchitecture
 from src.models.s4 import S4Architecture
 from src.models.s4_copy import S4CopyArchitecture
 from src.models.transformer import TransformerArchitecture
@@ -28,6 +30,8 @@ def load_config(config_name: IConfigName) -> Config:
 def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
     if arch_name == ARCH.LSTM:
         return LSTMArchitecture
+    if arch_name == ARCH.LSTM_COPY:
+        return LSTMCopyArchitecture
     elif arch_name == ARCH.TRANSFORMER:
         return TransformerArchitecture
     elif arch_name == ARCH.TRANSFORMER_COPY:
@@ -41,7 +45,7 @@ def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
 
 
 def get_config_name_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
-    if arch_name == ARCH.LSTM:
+    if arch_name == ARCH.LSTM or arch_name == ARCH.LSTM_COPY:
         return CONFIG_KEYS.LSTM
     elif arch_name == ARCH.TRANSFORMER or arch_name == ARCH.TRANSFORMER_COPY:
         return CONFIG_KEYS.TRANSFORMER
@@ -50,11 +54,9 @@ def get_config_name_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
     assert_never(arch_name)
 
 
-def get_dataset_by_name(dataset_name: DATASET) -> Type[BaseDataset]:
+def get_text_dataset_factory_by_name(dataset_name: DATASET) -> Type[TextDatasetFactory]:
     if dataset_name == DATASET.IMDB:
-        return IMDBlraDataset
-    elif dataset_name == DATASET.LISTOPS:
-        return ListOpsDataset
+        return IMDBlraDatasetFactory
     elif dataset_name == DATASET.WIKITEXT:
-        return WikiTextDataset
+        return WikiTextDatasetFactory
     assert_never(dataset_name)

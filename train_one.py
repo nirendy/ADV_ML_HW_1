@@ -1,6 +1,6 @@
 import argparse
+from typing import NamedTuple
 from typing import Optional
-from typing import Tuple
 
 import torch
 import torch.multiprocessing as mp
@@ -11,13 +11,13 @@ from src.trainer import Trainer
 from src.types import DATASET
 from src.types import IConfigName
 
-IArgs = Tuple[
-    IConfigName,
-    ARCH,
-    DATASET,
-    Optional[DATASET],
-    Optional[str],
-]
+
+class IArgs(NamedTuple):
+    config_name: IConfigName
+    architecture: ARCH
+    finetune_dataset: DATASET
+    pretrain_dataset: Optional[DATASET]
+    run_id: Optional[str]
 
 
 def train_one(
@@ -48,7 +48,7 @@ def main_parser():
     parser.add_argument('--with_parallel', type=bool, default=False)
     main_args = parser.parse_args()
     main(
-        args=(
+        args=IArgs(
             main_args.config_name,
             main_args.architecture,
             main_args.finetune_dataset,
@@ -61,6 +61,7 @@ def main_parser():
 
 def main(args: IArgs, is_parallel: bool):
     if is_parallel:
+        set_seed(42)  # TODO: Need here? (we do it again after the spawn)
         world_size = torch.cuda.device_count()
         mp.spawn(
             fn=train_one,
@@ -76,46 +77,5 @@ def main(args: IArgs, is_parallel: bool):
         )
 
 
-def main_small(run_id=None):
-    main(
-        args=(
-            'small',
-            # ARCH.S4,
-            # ARCH.S4_COPY,
-            # ARCH.LSTM,
-            ARCH.TRANSFORMER,
-            DATASET.LISTOPS,
-            None,
-            run_id
-        ),
-        is_parallel=False,
-    )
-
-
-def main_medium(is_parallel: bool, run_id=None):
-    main(
-        args=(
-            'medium',
-            ARCH.TRANSFORMER,
-            DATASET.IMDB,
-            None,
-            run_id,
-        ),
-        is_parallel=is_parallel,
-    )
-    # python train_one.py  --config_name medium --architecture s4_copy --finetune_dataset imdb --run_id 20240723_00-09-03 --with_parallel True
-
-
 if __name__ == '__main__':
-    set_seed(42)
-
-    # main_parser()
-    # main_small()
-    # main_small('20240722_14-47-44')
-    # main_medium(is_parallel=True, run_id=None)
-    main_medium(is_parallel=False, run_id=None)
-
-    # train_one(
-    #     'small', ARCH.LSTM, DATASET.LISTOPS, None,
-    #     run_id='20240722_14-47-44'
-    # )
+    main_parser()

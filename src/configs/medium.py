@@ -6,8 +6,8 @@ from src.utils.config_types import TransformerConfig
 
 config = Config(
     lstm=LSTMConfig(
-        input_size=256,
-        hidden_size=128,
+        d_model=256,
+        # hidden_size=128,
         num_layers=4
     ),
     transformer=TransformerConfig(
@@ -24,7 +24,7 @@ config = Config(
     training=TrainingConfig(
         batch_size=32,
         learning_rate=0.001,
-        epochs=40,
+        epochs=10,
         seed=42
     ),
 )

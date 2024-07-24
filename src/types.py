@@ -16,6 +16,7 @@ class SPLIT(STREnum):
 
 class ARCH(STREnum):
     LSTM = 'lstm'
+    LSTM_COPY = 'lstm_copy'
     TRANSFORMER = 'transformer'
     TRANSFORMER_COPY = 'transformer_copy'
     S4 = 's4'

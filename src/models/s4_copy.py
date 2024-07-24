@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from numpy.linalg import matrix_power, inv
-from src.datasets.base_dataset import BaseDataset
+from src.datasets.base_dataset import DatasetFactory
 from src.models.architecture import Architecture
 from src.types import CONFIG_KEYS
 from src.utils.config_types import S4Config
@@ -148,7 +148,7 @@ class S4Model(nn.Module):
 class S4CopyArchitecture(Architecture):
     model_config: S4Config
 
-    def initialize_model(self, dataset: BaseDataset) -> None:
+    def initialize_model(self, dataset: DatasetFactory) -> None:
         """
         Initializes the S4 model.
         """

@@ -4,34 +4,34 @@ import os
 import random
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
-from typing import Tuple
+from typing import Any
+from typing import Dict
+from typing import Optional
 from typing import TypedDict
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 
 from src.consts import DDP
 from src.consts import FORMATS
 from src.consts import PATHS
+from src.consts import STEPS
+from src.datasets.text_dataset import TextDatasetFactory
+from src.models.architecture import Architecture
 from src.types import ARCH
 from src.types import DATASET
-from src.consts import DATASETS_CONSTANTS
 from src.types import PHASE
 from src.types import SPLIT
-from src.consts import STEPS
-from src.datasets.base_dataset import BaseDataset
-from src.models.architecture import Architecture
 from src.utils.experiment_runner import get_arch_by_name
 from src.utils.experiment_runner import get_config_name_by_arch
-from src.utils.experiment_runner import get_dataset_by_name
+from src.utils.experiment_runner import get_text_dataset_factory_by_name
 from src.utils.experiment_runner import load_config
-import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
 
 
 def setup(rank, world_size):
@@ -42,7 +42,7 @@ def setup(rank, world_size):
 
 class Checkpoint(TypedDict):
     epoch: int
-    step: int
+    total_steps: int
     model_state_dict: Dict[str, Any]
     optimizer_state_dict: Dict[str, Any]
     best_loss: float
@@ -69,6 +69,7 @@ class Trainer:
         self.logger.setLevel(logging.INFO)
 
         self.best_loss = float('inf')
+        self.total_steps = 0
 
     def configure_logging(self):
         (PATHS.LOGS_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
@@ -85,13 +86,13 @@ class Trainer:
 
     @property
     def relative_path(self) -> str:
-        return '/'.join([
+        prefix = '_'.join([
             self._config_name,
             self._arch_name,
             *(['pre_' + self._pretrain_dataset] if self._pretrain_dataset else []),
             self._finetune_dataset,
-            self._run_id
         ])
+        return f"{prefix}/{self._run_id}"
 
     @property
     def training_config(self) -> Dict[str, Any]:
@@ -122,14 +123,13 @@ class Trainer:
             architecture: Architecture,
             optimizer: optim.Optimizer,
             epoch: int,
-            step: int,
             during_pretraining: bool
     ):
-        path = PATHS.CHECKPOINTS_DIR / self.relative_path / f'{step}.pth'
+        path = PATHS.CHECKPOINTS_DIR / self.relative_path / f'{self.total_steps}.pth'
         path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = Checkpoint(
             epoch=epoch,
-            step=step,
+            total_steps=self.total_steps,
             model_state_dict=architecture.model.state_dict(),
             optimizer_state_dict=optimizer.state_dict(),
             best_loss=self.best_loss,
@@ -139,36 +139,10 @@ class Trainer:
 
         self.logger.info(f"Checkpoint saved at {path}")
 
-    def load_checkpoint(self) -> Optional[Checkpoint]:
+    def load_checkpoint(self, device: torch.device) -> Optional[Checkpoint]:
         if (checkpoint_path := self.get_latest_chkpt()) is not None:
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path, map_location=device)
             return checkpoint
-
-    def load_checkpoint_old(self, path: Path, architecture: Architecture) -> Tuple[
-        optim.Optimizer,
-        Architecture,
-        int,  # epoch
-        int,  # step
-        bool,  # during_pretraining
-    ]:
-        if path.exists():
-            checkpoint = torch.load(path)
-            during_pretraining = checkpoint['during_pretraining']
-            optimizer = self.get_optimizer(architecture.model).load_state_dict(checkpoint['optimizer_state_dict'])
-            architecture.initialize_model()
-            if during_pretraining:
-                pass
-            else:
-                pass
-
-            step = int(path.stem)
-
-            architecture.model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.best_loss = checkpoint['best_loss']
-            self.logger.info(f"Checkpoint loaded from {path}")
-            return checkpoint['epoch'], checkpoint['during_pretraining']
-        assert False, f"Checkpoint not found at {path}"
 
     @property
     def rank(self) -> int:
@@ -186,6 +160,10 @@ class Trainer:
     def is_distributed(self) -> bool:
         return self._world_size > 1
 
+    @property
+    def is_with_pretraining(self) -> bool:
+        return self._pretrain_dataset is not None
+
     def get_optimizer(self, model: torch.nn.Module) -> optim.Optimizer:
         return optim.Adam(model.parameters(), lr=self.training_config['learning_rate'])
 
@@ -202,57 +180,76 @@ class Trainer:
         self.configure_logging()
 
         writer = SummaryWriter(log_dir=str(PATHS.TENSORBOARD_DIR / self.relative_path))
+        architecture = get_arch_by_name(self._arch_name)(self.arch_config)
 
-        checkpoint = self.load_checkpoint()
+        checkpoint = self.load_checkpoint(device)
 
+        skip_model_init = False
         if (
                 (checkpoint is not None and checkpoint['during_pretraining'])
-                or self._pretrain_dataset is not None
+                or self.is_with_pretraining
         ):
             self._train_model(
+                architecture=architecture,
                 phase_name=PHASE.AUTOREGRESSIVE,
                 checkpoint=checkpoint,
                 writer=writer,
                 device=device,
+                skip_model_init=False,
             )
             checkpoint = None
+            architecture.model.set_phase(PHASE.CLASSIFICATION)
+            skip_model_init = True
+
         metrics = self._train_model(
+            architecture=architecture,
             phase_name=PHASE.CLASSIFICATION,
             checkpoint=checkpoint,
             writer=writer,
             device=device,
+            skip_model_init=skip_model_init,
         )
 
         return metrics
 
     def _train_model(
             self,
+            architecture: Architecture,
             phase_name: PHASE,
             checkpoint: Optional[Checkpoint],
             writer: SummaryWriter,
             device: torch.device,
+            skip_model_init: bool,  # we want to skip it if we are in the fine-tuning phase
     ) -> Dict[str, float]:
         if phase_name == PHASE.CLASSIFICATION:
-            dataset_wrapper = get_dataset_by_name(self._finetune_dataset)(phase_name)
+            dataset_wrapper = get_text_dataset_factory_by_name(self._finetune_dataset)(phase_name)
         elif phase_name == PHASE.AUTOREGRESSIVE:
-            dataset_wrapper = get_dataset_by_name(self._pretrain_dataset)(phase_name)
+            dataset_wrapper = get_text_dataset_factory_by_name(self._pretrain_dataset)(phase_name)
         else:
             raise ValueError(f'Invalid phase name: {phase_name}')
         dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN)
-        architecture = get_arch_by_name(self._arch_name)(self.arch_config)
-        architecture.initialize_model(dataset_wrapper)
-        optimizer = self.get_optimizer(architecture.model)
+
+        # We don't want to re-initialize the model if we moved to the fine-tuning phase
+        if not skip_model_init:
+            architecture.initialize_model(dataset_wrapper)
+        optimizer = self.get_optimizer(architecture.model)  # TOOD: do we want to keep the pre-trained optimizer?
+
         start_epoch = 0
-        step = 0
         self.logger.info(f"Training {phase_name} phase")
 
         if checkpoint is not None:
             architecture.model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            # Move the optimizer state to the correct device # TODO: understand why we must need it
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.to(device)
             start_epoch = checkpoint['epoch']
-            step = checkpoint['step']
+            self.total_steps = checkpoint['total_steps']
             self.best_loss = checkpoint['best_loss']
             self.logger.info(f"Checkpoint loaded")
+
         self.logger.info(f"params count: {architecture.param_count}")
         if STEPS.PRINT_GRAPH and self.is_master_process:
             sample_input_tensor = next(iter(dataset))[0].unsqueeze(0)
@@ -286,7 +283,7 @@ class Trainer:
         architecture.model.train()
         metrics = {}
         for epoch in range(start_epoch, self.training_config['epochs']):
-            for i, data in enumerate(data_loader):
+            for i_epoch_step, data in enumerate(data_loader):
                 inputs, labels = data
                 inputs, labels = inputs.to(device), labels.to(device)
                 optimizer.zero_grad()
@@ -301,45 +298,46 @@ class Trainer:
 
                 loss.backward()
                 optimizer.step()
-                step += 1
+                self.total_steps += 1
 
                 if self.is_master_process:
                     # Log the training loss
-                    if step % STEPS.LOG_STEP == 0:
+                    if self.total_steps % STEPS.LOG_STEP == 0:
                         writer.add_scalar(
                             '/'.join([
                                 self.relative_path,
-                                self._run_id,
                                 dataset_wrapper.phase_name,
                                 'Loss'
                             ]),
                             loss.item(),
-                            step
+                            self.total_steps
                         )
                         self.best_loss = min(self.best_loss, loss.item())
                         self.logger.info(
                             f'{dataset_wrapper.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
-                            f'Step [{step}/{len(data_loader)}], Loss: {loss.item():.4f}'
+                            f'Step [{i_epoch_step}/{len(data_loader)}], Total Steps: {self.total_steps}, Loss: {loss.item():.4f}'
                         )
 
-                    if step >= STEPS.WARMUP_STEPS and step % STEPS.SAVE_STEP == 0:
+                    if self.total_steps >= STEPS.WARMUP_STEPS and self.total_steps % STEPS.SAVE_STEP == 0:
                         self.save_checkpoint(
                             architecture, optimizer, epoch,
-                            step=step,
                             during_pretraining=dataset_wrapper.phase_name == PHASE.AUTOREGRESSIVE
                         )
-                    if step >= STEPS.WARMUP_STEPS and step % STEPS.EVAL_STEP == 0:
+                    if (
+                            dataset_wrapper.phase_name == PHASE.CLASSIFICATION
+                            and self.total_steps >= STEPS.WARMUP_STEPS
+                            and self.total_steps % STEPS.EVAL_STEP == 0
+                    ):
                         metrics = self._evaluate_model(architecture, dataset_wrapper, SPLIT.TEST, device)
                         for key, value in metrics.items():
                             writer.add_scalar(
                                 '/'.join([
                                     self.relative_path,
-                                    self._run_id,
                                     dataset_wrapper.phase_name,
                                     key
                                 ]),
                                 value,
-                                step,
+                                self.total_steps,
                             )
                         self.logger.info(f'Test Metrics: {metrics}')
         return metrics
@@ -347,7 +345,7 @@ class Trainer:
     def _evaluate_model(
             self,
             architecture: Architecture,
-            dataset: BaseDataset,
+            dataset: TextDatasetFactory,
             split: SPLIT,
             device: torch.device,
     ) -> Dict[str, float]:

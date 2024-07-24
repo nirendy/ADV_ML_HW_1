@@ -1,8 +1,8 @@
 #! /bin/bash
 
-#SBATCH --job-name=imdb_transformer # Job name
-#SBATCH --output=slurm/logs/imdb_transformer.out # redirect stdout
-#SBATCH --error=slurm/logs/imdb_transformer.err # redirect stderr
+#SBATCH --job-name=imdb_transformer_copy # Job name
+#SBATCH --output=slurm/logs/imdb_transformer_copy.out # redirect stdout
+#SBATCH --error=slurm/logs/imdb_transformer_copy.err # redirect stderr
 #SBATCH --partition=gpu-a100-killable # (see resources section)
 #SBATCH --time=1200 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time’s up
@@ -10,7 +10,7 @@
 #SBATCH --ntasks=1 # number of processes
 #SBATCH --mem=50000 # CPU memory (MB)
 #SBATCH --cpus-per-task=1 # CPU cores per process
-#SBATCH --gpus=4 # GPUs in total
+#SBATCH --gpus=2 # GPUs in total
 #SBATCH --account=gpu-research # billing account
 
 nvidia-smi
@@ -45,7 +45,7 @@ cd /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 # Change to the working directory
 python train_one.py  \
 --config_name medium \
---architecture transformer \
+--architecture transformer_copy \
 --finetune_dataset imdb \
 --with_parallel True
 

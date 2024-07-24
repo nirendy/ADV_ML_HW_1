@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from src.datasets.base_dataset import BaseDataset
+from src.datasets.base_dataset import DatasetFactory
 from src.models.architecture import Architecture
 from src.utils.config_types import TransformerConfig
 
@@ -125,7 +125,7 @@ class TransformerModel(nn.Module):
 class TransformerArchitecture(Architecture):
     model_config: TransformerConfig
 
-    def initialize_model(self, dataset: BaseDataset) -> None:
+    def initialize_model(self, dataset: DatasetFactory) -> None:
         self.model = TransformerModel(
             vocab_size=dataset.vocab_size,
             d_model=self.model_config['d_model'],
