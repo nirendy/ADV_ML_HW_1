@@ -1,8 +1,8 @@
 #! /bin/bash
 
-#SBATCH --job-name=imdb_s4 # Job name
-#SBATCH --output=slurm/logs/pre_imdb_imdb_s4_copy.out # redirect stdout
-#SBATCH --error=slurm/logs/pre_imdb_imdb_s4_copy.err # redirect stderr
+#SBATCH --job-name=pre_wikitext_imdb_transformer # Job name
+#SBATCH --output=slurm/logs/pre_wikitext_imdb_transformer.out # redirect stdout
+#SBATCH --error=slurm/logs/pre_wikitext_imdb_transformer.err # redirect stderr
 #SBATCH --partition=gpu-a100-killable # (see resources section)
 #SBATCH --time=1200 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time’s up
@@ -44,10 +44,10 @@ cd /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 
 # Change to the working directory
 python train_one.py  \
---config_name medium \
---architecture s4_copy \
+--config_name small \
+--architecture transformer \
 --finetune_dataset imdb \
---pretrain_dataset imdb \
+--pretrain_dataset wikitext \
 --with_parallel True
 
 # Trap keyboard interrupt (Ctrl+C) to end the job

@@ -10,7 +10,7 @@
 #SBATCH --ntasks=1 # number of processes
 #SBATCH --mem=50000 # CPU memory (MB)
 #SBATCH --cpus-per-task=1 # CPU cores per process
-#SBATCH --gpus=4 # GPUs in total
+#SBATCH --gpus=2 # GPUs in total
 #SBATCH --account=gpu-research # billing account
 
 nvidia-smi

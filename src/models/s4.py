@@ -4,12 +4,20 @@ import torch.nn as nn
 import numpy as np
 from numpy.linalg import matrix_power, inv
 from src.datasets.base_dataset import DatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
+from src.models.architecture import AbstractSequenceModel
 from src.models.architecture import Architecture
+from src.types import PHASE
 from src.utils.config_types import S4Config
 
 
 class S4Layer(nn.Module):
-    def __init__(self, A, B, C, L, kernel_method: bool):
+    def __init__(
+            self,
+            d_model: int,
+            d_state: int,
+            kernel_method: bool
+    ):
         """
         A: (N, N)
         B: (N, 1)
@@ -19,14 +27,36 @@ class S4Layer(nn.Module):
         """
         super(S4Layer, self).__init__()
         self.kernel_method = kernel_method
-        self.L = L
-        self.A, self.B, self.C = self.discretize(A, B, C, step=1.0 / L)
-        self.A = torch.tensor(self.A, dtype=torch.float32)
-        self.B = torch.tensor(self.B, dtype=torch.float32)
-        self.C = torch.tensor(self.C, dtype=torch.float32)
+        self.h = d_state
+
+        A = self.make_A(self.h)
+        B = np.random.randn(self.h, 1)  # (N, 1)
+        C = np.random.randn(1, self.h)
+
+        self.A_, self.B_, self.C_ = self.discretize(A, B, C, step=1.0 / L)
+        self.A_ = torch.tensor(self.A_, dtype=torch.float32)
+        self.B_ = torch.tensor(self.B_, dtype=torch.float32)
+        self.C_ = torch.tensor(self.C_, dtype=torch.float32)
         if kernel_method:
-            self.K = self.compute_kernel(self.A.numpy(), self.B.numpy(), self.C.numpy(), self.L)
+            self.K = self.compute_kernel(self.A_.numpy(), self.B_.numpy(), self.C_.numpy(), self.L)
             self.K = torch.tensor(self.K, dtype=torch.float32)
+
+    @staticmethod
+    def make_A(N: int) -> np.ndarray:
+        """
+        Creates the A matrix used in the S4 layer.
+        A: (N, N)
+        """
+
+        def v(n, k):
+            if n > k:
+                return np.sqrt(2 * n + 1) * np.sqrt(2 * k + 1)
+            elif n == k:
+                return n + 1
+            else:
+                return 0
+
+        return -np.array([[v(n, k) for k in range(1, N + 1)] for n in range(1, N + 1)])  # (N, N)
 
     def discretize(self, A: np.ndarray, B: np.ndarray, C: np.ndarray, step: float) -> Tuple[
         np.ndarray, np.ndarray, np.ndarray]:
@@ -88,12 +118,12 @@ class S4Layer(nn.Module):
             Returns x_k: (batch_size * d_model, N)
             y_k: (batch_size * d_model,)
             """
-            x_k = self.A @ x_k_1.T + self.B @ u_k.unsqueeze(
+            x_k = self.A_ @ x_k_1.T + self.B_ @ u_k.unsqueeze(
                 -1).T  # (N, batch_size * d_model) = (N, N) @ (batch_size * d_model, N).T + (N, 1) @ (batch_size * d_model, 1).T
-            y_k = self.C @ x_k  # (1, batch_size * d_model) = (1, N) @ (N, batch_size * d_model)
+            y_k = self.C_ @ x_k  # (1, batch_size * d_model) = (1, N) @ (N, batch_size * d_model)
             return x_k.T, y_k.T  # (batch_size * d_model, N), (batch_size * d_model,)
 
-        x_k_1 = torch.zeros((batch_size * d_model, self.A.shape[0]), dtype=u.dtype,
+        x_k_1 = torch.zeros((batch_size * d_model, self.A_.shape[0]), dtype=u.dtype,
                             device=u.device)  # (batch_size * d_model, N)
         ys = []
         for u_k in u.T:  # Iterate over time steps
@@ -117,67 +147,51 @@ class S4Layer(nn.Module):
             return self.forward_regressive(u)
 
 
-class S4Model(nn.Module):
-    def __init__(self, vocab_size: int, d_model: int, state_size: int, num_layers: int, num_classes: int):
-        super(S4Model, self).__init__()
-        self._vocab_size = vocab_size
-        self._d_model = d_model
-        self._state_size = state_size
-        self._num_layers = num_layers
-        self._num_classes = num_classes
+class S4Model(AbstractSequenceModel):
+    def __init__(
+            self,
+            d_model: int,
+            state_size: int,
+            num_layers: int,
+            vocab_size: int,
+            phase_name: PHASE
+    ):
+        super(S4Model, self).__init__(vocab_size, d_model, phase_name)
+        self.state_size = state_size
+        self.num_layers = num_layers
 
-        self.embedding = nn.Embedding(vocab_size, d_model)  # (vocab_size, d_model)
-        self.s4_layers = nn.ModuleList(
-            [S4Layer(self.make_A(state_size),
-                     np.random.randn(state_size, 1),  # (N, 1)
-                     np.random.randn(1, state_size),  # (1, N)
-                     L=100,  # Sequence length
-                     kernel_method=False)
-             for _ in range(num_layers)]
-        )
-        self.fc = nn.Linear(d_model, num_classes)  # (d_model, num_classes)
+        self.s4_layers = nn.ModuleList([
+            S4Layer(
+                d_model=d_model,
+                d_state=state_size,
+                kernel_method=True
+            )
+            for _ in range(num_layers)
+        ])
 
-    def make_A(self, N: int) -> np.ndarray:
+    def forward_sequence_model(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Creates the A matrix used in the S4 layer.
-        A: (N, N)
+        Parameters:
+            x: (batch_size, seq_len, d_model)
+        Returns:
+            x: (batch_size, seq_len, d_model)
         """
-
-        def v(n, k):
-            if n > k:
-                return np.sqrt(2 * n + 1) * np.sqrt(2 * k + 1)
-            elif n == k:
-                return n + 1
-            else:
-                return 0
-
-        return -np.array([[v(n, k) for k in range(1, N + 1)] for n in range(1, N + 1)])  # (N, N)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: (batch_size, L)
-        Returns output: (batch_size, num_classes)
-        """
-        embedded = self.embedding(x)  # (batch_size, L, d_model)
 
         for layer in self.s4_layers:
-            embedded = layer(embedded)  # (batch_size, L, d_model)
+            x, _ = layer(x)
 
-        output = self.fc(embedded[:, 0, :])  # (batch_size, d_model) => (batch_size, num_classes)
+        output = x
         return output
 
 
 class S4Architecture(Architecture):
     model_config: S4Config
 
-    def initialize_model(self, dataset: DatasetFactory) -> None:
-        """
-        Initializes the S4 model.
-        """
+    def initialize_model(self, dataset: TextDatasetFactory) -> None:
         self.model = S4Model(
-            dataset.vocab_size,
-            self.model_config['d_model'],
-            self.model_config['state_size'],
-            self.model_config['num_layers'],
-            dataset.num_classes
+            d_model=self.model_config['d_model'],
+            state_size=self.model_config['state_size'],
+            num_layers=self.model_config['num_layers'],
+            vocab_size=dataset.vocab_size,
+            phase_name=dataset.phase_name,
         )

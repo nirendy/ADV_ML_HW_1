@@ -37,6 +37,15 @@ class AbstractSequenceModel(nn.Module, ABC):
 
     @abstractmethod
     def forward_sequence_model(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the sequence model.
+
+        Parameters:
+            x: (batch_size, seq_len, d_model)
+
+        Returns:
+            x: (batch_size, seq_len, d_model)
+        """
         pass
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -7,9 +7,9 @@ if __name__ == '__main__':
     main(
         args=IArgs(
             config_name='small',
-            architecture=ARCH.TRANSFORMER_COPY,
-            finetune_dataset=DATASET.WIKITEXT,
-            pretrain_dataset=DATASET.WIKITEXT,
+            architecture=ARCH.TRANSFORMER,
+            finetune_dataset=DATASET.IMDB,
+            pretrain_dataset=None,
             run_id=None
         ),
         is_parallel=False,

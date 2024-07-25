@@ -1,11 +1,7 @@
-from typing import Tuple, Dict
-import torch
-import torch.nn as nn
-import numpy as np
-from numpy.linalg import matrix_power, inv
-from src.datasets.base_dataset import DatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
+from src.models.architecture import AbstractSequenceModel
 from src.models.architecture import Architecture
-from src.types import CONFIG_KEYS
+from src.types import PHASE
 from src.utils.config_types import S4Config
 
 """Minimal version of S4D with extra options and features stripped out, for pedagogical purposes."""
@@ -13,8 +9,7 @@ from src.utils.config_types import S4Config
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from einops import rearrange, repeat
+from einops import repeat
 
 
 class S4DKernel(nn.Module):
@@ -90,8 +85,16 @@ class S4D(nn.Module):
             nn.GLU(dim=-2),
         )
 
-    def forward(self, u, **kwargs):  # absorbs return_output and transformer src mask
-        """ Input and output shape (B, H, L) """
+    def forward(self, u):  # absorbs return_output and transformer src mask
+        """
+
+        Args:
+            u: (B, H, L) if transposed else (B, L, H)
+
+        Returns:
+
+        """
+
         if not self.transposed: u = u.transpose(-1, -2)
         L = u.size(-1)
 
@@ -112,50 +115,52 @@ class S4D(nn.Module):
         return y, None  # Return a dummy state to satisfy this repo's interface, but this can be modified
 
 
-class S4Model(nn.Module):
-    def __init__(self, vocab_size: int, d_model: int, state_size: int, num_layers: int, num_classes: int):
-        super(S4Model, self).__init__()
-        self._vocab_size = vocab_size
-        self._d_model = d_model
-        self._state_size = state_size
-        self._num_layers = num_layers
-        self._num_classes = num_classes
+class S4Model(AbstractSequenceModel):
+    def __init__(
+            self,
+            d_model: int,
+            state_size: int,
+            num_layers: int,
+            vocab_size: int,
+            phase_name: PHASE
+    ):
+        super(S4Model, self).__init__(vocab_size, d_model, phase_name)
+        self.state_size = state_size
+        self.num_layers = num_layers
 
-        self.embedding = nn.Embedding(vocab_size, d_model)
         self.s4_layers = nn.ModuleList(
             [
                 S4D(d_model, state_size)
                 for _ in range(num_layers)
             ]
         )
-        self.fc = nn.Linear(d_model, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_sequence_model(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x: (batch_size, L)
-        Returns output: (batch_size, num_classes)
+        Parameters:
+            x: (batch_size, seq_len, d_model)
+        Returns:
+            x: (batch_size, seq_len, d_model)
         """
-        embedded = self.embedding(x)  # (batch_size, L, d_model)
-        embedded = embedded.permute(0, 2, 1)  # (batch_size, d_model, L)
+        # Change dims to (batch_size, d_model, seq_len)
+        x = x.permute(0, 2, 1)
 
         for layer in self.s4_layers:
-            embedded, _ = layer(embedded)  # (batch_size, d_model, L)
+            x, _ = layer(x)
 
-        output = self.fc(embedded[..., 0])  # (batch_size, d_model) => (batch_size, num_classes)
+        # Change dims back
+        output = x.permute(0, 2, 1)
         return output
 
 
 class S4CopyArchitecture(Architecture):
     model_config: S4Config
 
-    def initialize_model(self, dataset: DatasetFactory) -> None:
-        """
-        Initializes the S4 model.
-        """
+    def initialize_model(self, dataset: TextDatasetFactory) -> None:
         self.model = S4Model(
-            dataset.vocab_size,
-            self.model_config['d_model'],
-            self.model_config['state_size'],
-            self.model_config['num_layers'],
-            dataset.num_classes
+            d_model=self.model_config['d_model'],
+            state_size=self.model_config['state_size'],
+            num_layers=self.model_config['num_layers'],
+            vocab_size=dataset.vocab_size,
+            phase_name=dataset.phase_name,
         )

@@ -5,7 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 
 from src.datasets.base_dataset import DatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
+from src.models.architecture import AbstractSequenceModel
 from src.models.architecture import Architecture
+from src.types import PHASE
 from src.utils.config_types import LSTMConfig
 
 
@@ -66,38 +69,43 @@ class LSTMLayer(nn.Module):
         return torch.stack(outputs), (h_next, c_next)
 
 
-class LSTM(nn.Module):
-    def __init__(self, vocab_size: int, d_model: int, hidden_size: int, num_layers: int, num_classes: int):
-        super(LSTM, self).__init__()
-        self.d_model = vocab_size
-        self.d_model = d_model
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.num_classes = num_classes
+class LSTMModel(AbstractSequenceModel):
 
-        self.embedding = nn.Embedding(vocab_size, d_model)
+    def __init__(self, d_model: int, hidden_size: int, num_layers: int, vocab_size: int, phase_name: PHASE):
+        super(LSTMModel, self).__init__(vocab_size, d_model, phase_name)
         self.lstm = LSTMLayer(d_model, hidden_size, num_layers)
-        self.fc = nn.Linear(hidden_size, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_sequence_model(self, x):
+        """
+        Parameters:
+            x: (batch_size, seq_len, d_model)
+        Returns:
+            x: (batch_size, seq_len, d_model)
+        """
         batch_size = x.size(0)
-        h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
-        c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+        # Initialize hidden state
+        h_0 = torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(x.device)
+        # Initialize cell state
+        c_0 = torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(x.device)
 
-        embedded = self.embedding(x)
-        lstm_out, _ = self.lstm(embedded.permute(1, 0, 2), (h_0, c_0))
+        # Change dims to (seq_len, batch_size, d_model)
+        x = x.permute(1, 0, 2)
+        lstm_out, _ = self.lstm(x, (h_0, c_0))
 
-        # We only need the output of the last time step
-        output = lstm_out[-1]
-        output = self.fc(output)
+        # Change dims back
+        output = lstm_out.permute(1, 0, 2)
         return output
 
 
 class LSTMArchitecture(Architecture):
     model_config: LSTMConfig
 
-    def initialize_model(self, dataset: DatasetFactory) -> None:
-        self.model = LSTM(
-            dataset.vocab_size, self.model_config['d_model'], self.model_config['hidden_size'],
-            self.model_config['num_layers'], dataset.num_classes
+    def initialize_model(self, dataset: TextDatasetFactory) -> None:
+        self.model = LSTMModel(
+            d_model=self.model_config['d_model'],
+            hidden_size=self.model_config['d_model'],
+            # hidden_size=self.model_config['hidden_size'], # disabled for now, we enforce d_model == state_size # TODO: enable this
+            num_layers=self.model_config['num_layers'],
+            vocab_size=dataset.vocab_size,
+            phase_name=dataset.phase_name
         )

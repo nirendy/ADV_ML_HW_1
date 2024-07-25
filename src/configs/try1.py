@@ -7,7 +7,7 @@ from src.utils.config_types import TransformerConfig
 config = Config(
     lstm=LSTMConfig(
         d_model=10,
-        hidden_size=20,
+        # hidden_size=20,
         num_layers=2
     ),
     transformer=TransformerConfig(

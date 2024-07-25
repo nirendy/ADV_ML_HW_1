@@ -72,10 +72,10 @@ class Trainer:
         self.total_steps = 0
 
     def configure_logging(self):
-        (PATHS.LOGS_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
+        (PATHS.TENSORBOARD_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
         if self.is_master_process:
             self.logger.addHandler(logging.StreamHandler())
-            self.logger.addHandler(logging.FileHandler(PATHS.LOGS_DIR / self.relative_path / f'{self._run_id}.log'))
+            self.logger.addHandler(logging.FileHandler(PATHS.TENSORBOARD_DIR / self.relative_path / f'{self._run_id}.log'))
             self.dump_config()
         else:
             self.logger.addHandler(logging.NullHandler())
@@ -99,16 +99,10 @@ class Trainer:
         return self._config['training']
 
     def dump_config(self):
-        path = PATHS.LOGS_DIR / self.relative_path / f'config_{time.strftime(FORMATS.TIME)}.json'
+        path = PATHS.TENSORBOARD_DIR / self.relative_path / f'config_{time.strftime(FORMATS.TIME)}.json'
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             json.dump(self._config, f, indent=4)
-
-    def log(self, msg: str):
-        path = PATHS.LOGS_DIR / self.relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'a') as f:
-            f.write(msg + '\n')
 
     def get_loss_fn(self, phase_name: PHASE, pad_token_id: int) -> nn.Module:
         if phase_name == PHASE.CLASSIFICATION:
@@ -315,7 +309,7 @@ class Trainer:
                         self.best_loss = min(self.best_loss, loss.item())
                         self.logger.info(
                             f'{dataset_wrapper.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
-                            f'Step [{i_epoch_step}/{len(data_loader)}], Total Steps: {self.total_steps}, Loss: {loss.item():.4f}'
+                            f'Step [{i_epoch_step + 1}/{len(data_loader)}], Total Steps: {self.total_steps}, Loss: {loss.item():.4f}'
                         )
 
                     if self.total_steps >= STEPS.WARMUP_STEPS and self.total_steps % STEPS.SAVE_STEP == 0:

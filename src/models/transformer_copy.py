@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from src.datasets.base_dataset import DatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
 from src.models.architecture import AbstractSequenceModel
 from src.models.architecture import Architecture
 from src.types import PHASE
@@ -24,7 +25,7 @@ class TransformerModel(AbstractSequenceModel):
 class TransformerCopyArchitecture(Architecture):
     model_config: TransformerConfig
 
-    def initialize_model(self, dataset: DatasetFactory) -> None:
+    def initialize_model(self, dataset: TextDatasetFactory) -> None:
         self.model = TransformerModel(
             d_model=self.model_config['d_model'],
             num_heads=self.model_config['num_heads'],

@@ -44,7 +44,7 @@ cd /home/yandex/DL20232024a/nirendy/repos/ADV_ML_HW_1/
 
 # Change to the working directory
 python train_one.py  \
---config_name medium \
+--config_name small \
 --architecture transformer_copy \
 --finetune_dataset imdb \
 --pretrain_dataset wikitext \

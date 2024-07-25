@@ -1,6 +1,7 @@
 from torch import nn
 
 from src.datasets.base_dataset import DatasetFactory
+from src.datasets.text_dataset import TextDatasetFactory
 from src.models.architecture import AbstractSequenceModel
 from src.models.architecture import Architecture
 from src.types import PHASE
@@ -25,7 +26,7 @@ class LSTMModel(AbstractSequenceModel):
 class LSTMCopyArchitecture(Architecture):
     model_config: LSTMConfig
 
-    def initialize_model(self, dataset: DatasetFactory) -> None:
+    def initialize_model(self, dataset: TextDatasetFactory) -> None:
         self.model = LSTMModel(
             d_model=self.model_config['d_model'],
             hidden_size=self.model_config['d_model'],

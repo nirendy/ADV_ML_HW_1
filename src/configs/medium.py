@@ -6,9 +6,9 @@ from src.utils.config_types import TransformerConfig
 
 config = Config(
     lstm=LSTMConfig(
-        d_model=256,
+        d_model=32,
         # hidden_size=128,
-        num_layers=4
+        num_layers=2,
     ),
     transformer=TransformerConfig(
         d_model=256,
