@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+from typing import NamedTuple
+
 from src.types import SPLIT
 
 
@@ -13,7 +16,6 @@ class PATHS:
     PREPROCESSED_IMDB_LRA_DIR = PREPROCESSED_DATA_DIR / 'imdb_lra'
 
     CHECKPOINTS_DIR = PROJECT_DIR / 'checkpoints'
-    LOGS_DIR = PROJECT_DIR / 'logs'
 
     TENSORBOARD_DIR = PROJECT_DIR / 'tensorboard'
 
@@ -41,12 +43,28 @@ class STEPS:
 
 class FORMATS:
     TIME = "%Y%m%d_%H-%M-%S"
+    LOGGER_FORMAT = '%(asctime)s - %(message)s'
 
 
 class DDP:
-    MASTER_PORT = '12355'
+    MASTER_PORT = os.environ.get('MASTER_PORT', '12355')
     MASTER_ADDR = 'localhost'
     BACKEND = 'nccl'
     SHUFFLE = True
     DROP_LAST = True
     NUM_WORKERS = 0
+
+
+class IAddArgs(NamedTuple):
+    with_parallel: bool
+    partition: str = 'gpu-a100-killable'
+    time: int = 1200
+    singal: str = 'USR1@120'
+    nodes: int = 1
+    ntasks: int = 1
+    mem: int = int(5e4)
+    cpus_per_task: int = 1
+    gpus: int = 2
+    account: str = 'gpu-research'
+    workspace = PATHS.PROJECT_DIR
+    outputs_relative_path = PATHS.TENSORBOARD_DIR.relative_to(PATHS.PROJECT_DIR)

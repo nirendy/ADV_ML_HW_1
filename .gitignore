@@ -2,3 +2,17 @@
 /tensorboard/
 checkpoints/
 logs/
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/.gitignore
+/.idea/ADV_ML_HW_1.iml
+/.idea/deployment.xml
+/.idea/forwardedPorts.xml
+/.idea/git_toolbox_blame.xml
+/.idea/git_toolbox_prj.xml
+/.idea/jupyter-settings.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml
+/.idea/webServers.xml
+debug/

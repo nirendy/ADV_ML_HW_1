@@ -1,10 +1,12 @@
 import importlib
+import time
+from typing import Optional
 from typing import Type
+
 from typing_extensions import assert_never
 
-from src.datasets.base_dataset import DatasetFactory
+from src.consts import FORMATS
 from src.datasets.imdb_lra_dataset import IMDBlraDatasetFactory
-from src.datasets.listops_dataset import ListOpsDatasetFactory
 from src.datasets.text_dataset import TextDatasetFactory
 from src.datasets.wikitext_dataset import WikiTextDatasetFactory
 from src.models.architecture import Architecture
@@ -60,3 +62,21 @@ def get_text_dataset_factory_by_name(dataset_name: DATASET) -> Type[TextDatasetF
     elif dataset_name == DATASET.WIKITEXT:
         return WikiTextDatasetFactory
     assert_never(dataset_name)
+
+
+def construct_experiment_name(
+        config_name: IConfigName,
+        arch_name: ARCH,
+        finetune_dataset: DATASET,
+        pretrain_dataset: Optional[DATASET] = None
+) -> str:
+    return '_'.join([
+        config_name,
+        arch_name,
+        *(['pre_' + pretrain_dataset] if pretrain_dataset else []),
+        finetune_dataset,
+    ])
+
+
+def create_run_id(run_id: Optional[str]) -> str:
+    return run_id if (run_id is not None) else time.strftime(FORMATS.TIME)

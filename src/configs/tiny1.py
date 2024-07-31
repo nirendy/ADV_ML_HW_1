@@ -6,24 +6,24 @@ from src.utils.config_types import TransformerConfig
 
 config = Config(
     lstm=LSTMConfig(
-        d_model=32,
-        # hidden_size=128,
-        num_layers=2,
+        d_model=8,
+        # hidden_size=20,
+        num_layers=2
     ),
     transformer=TransformerConfig(
-        d_model=256,
+        d_model=64,
         num_heads=4,
         num_layers=2,
-        dim_feedforward=512,
+        dim_feedforward=64,
     ),
     s4=S4Config(
-        d_model=256,
-        state_size=64,
-        num_layers=3
+        d_model=64,
+        state_size=32,
+        num_layers=2
     ),
     training=TrainingConfig(
         batch_size=32,
-        learning_rate=0.001,
+        learning_rate=0.0001,
         epochs=10,
         seed=42
     ),

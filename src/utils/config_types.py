@@ -1,8 +1,4 @@
-from typing import Literal
 from typing import TypedDict
-
-from src.types import ARCH
-
 
 class LSTMConfig(TypedDict):
     d_model: int

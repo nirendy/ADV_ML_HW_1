@@ -1,4 +1,6 @@
-from typing import TypeVar
+from typing import NamedTuple
+from typing import NewType
+from typing import Optional
 from enum import Enum
 
 
@@ -25,7 +27,7 @@ class ARCH(STREnum):
 
 class DATASET(STREnum):
     IMDB = 'imdb'
-    LISTOPS = 'listops'
+    # LISTOPS = 'listops'
     WIKITEXT = 'wikitext'
 
 
@@ -41,4 +43,12 @@ class CONFIG_KEYS(STREnum):
     TRAINING = 'training'
 
 
-IConfigName: TypeVar = TypeVar('IConfigName', str, str)
+IConfigName = NewType('IConfigName', str)
+
+
+class IArgs(NamedTuple):
+    config_name: IConfigName
+    architecture: ARCH
+    finetune_dataset: DATASET
+    pretrain_dataset: Optional[DATASET]
+    run_id: Optional[str]

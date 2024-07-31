@@ -7,5 +7,5 @@ datasets
 einops
 jupyterlab
 protobuf
+tensorflow[and-cuda]
 tensorflow_datasets
-transformers

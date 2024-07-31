@@ -28,6 +28,8 @@ from src.types import ARCH
 from src.types import DATASET
 from src.types import PHASE
 from src.types import SPLIT
+from src.utils.experiment_runner import construct_experiment_name
+from src.utils.experiment_runner import create_run_id
 from src.utils.experiment_runner import get_arch_by_name
 from src.utils.experiment_runner import get_config_name_by_arch
 from src.utils.experiment_runner import get_text_dataset_factory_by_name
@@ -58,7 +60,7 @@ class Trainer:
             pretrain_dataset: Optional[DATASET],
             run_id: Optional[str] = None
     ):
-        self._run_id = run_id or time.strftime(FORMATS.TIME)
+        self._run_id = create_run_id(run_id)
         self._config_name = config_name
         self._config = load_config(config_name)
         self._arch_name = architecture
@@ -67,6 +69,10 @@ class Trainer:
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
+        # add time prefix to log
+        formatter = logging.Formatter(FORMATS.LOGGER_FORMAT)
+        for handler in self.logger.handlers:
+            handler.setFormatter(formatter)
 
         self.best_loss = float('inf')
         self.total_steps = 0
@@ -75,7 +81,8 @@ class Trainer:
         (PATHS.TENSORBOARD_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
         if self.is_master_process:
             self.logger.addHandler(logging.StreamHandler())
-            self.logger.addHandler(logging.FileHandler(PATHS.TENSORBOARD_DIR / self.relative_path / f'{self._run_id}.log'))
+            self.logger.addHandler(
+                logging.FileHandler(PATHS.TENSORBOARD_DIR / self.relative_path / f'{self._run_id}.log'))
             self.dump_config()
         else:
             self.logger.addHandler(logging.NullHandler())
@@ -86,12 +93,12 @@ class Trainer:
 
     @property
     def relative_path(self) -> str:
-        prefix = '_'.join([
+        prefix = construct_experiment_name(
             self._config_name,
             self._arch_name,
-            *(['pre_' + self._pretrain_dataset] if self._pretrain_dataset else []),
             self._finetune_dataset,
-        ])
+            self._pretrain_dataset
+        )
         return f"{prefix}/{self._run_id}"
 
     @property
