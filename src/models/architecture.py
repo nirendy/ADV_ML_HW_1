@@ -75,8 +75,7 @@ class Architecture(ABC):
         """Initialize the model architecture."""
         pass
 
-    @property
-    def param_count(self) -> int:
+    def count_params(self, abstract_params_only=False) -> int:
         """Return the number of parameters in the model."""
         return sum(p.numel() for p in self.model.parameters())
 

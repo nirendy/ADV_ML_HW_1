@@ -8,6 +8,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 from typing import TypedDict
+from typing import assert_never
 
 import numpy as np
 import torch
@@ -25,15 +26,21 @@ from src.consts import STEPS
 from src.datasets.text_dataset import TextDatasetFactory
 from src.models.architecture import Architecture
 from src.types import ARCH
+from src.types import CONFIG_KEYS
 from src.types import DATASET
+from src.types import IConfigName
+from src.types import LR_SCHEDULER
+from src.types import OPTIMIZER
 from src.types import PHASE
 from src.types import SPLIT
+from src.utils.config_types import TrainingConfig
 from src.utils.experiment_runner import construct_experiment_name
 from src.utils.experiment_runner import create_run_id
 from src.utils.experiment_runner import get_arch_by_name
-from src.utils.experiment_runner import get_config_name_by_arch
+from src.utils.experiment_runner import get_config_key_by_arch
 from src.utils.experiment_runner import get_text_dataset_factory_by_name
 from src.utils.experiment_runner import load_config
+from src.utils.experiment_runner import params_count_report
 
 
 def setup(rank, world_size):
@@ -54,7 +61,7 @@ class Checkpoint(TypedDict):
 class Trainer:
     def __init__(
             self,
-            config_name: str,
+            config_name: IConfigName,
             architecture: ARCH,
             finetune_dataset: DATASET,
             pretrain_dataset: Optional[DATASET],
@@ -76,6 +83,7 @@ class Trainer:
 
         self.best_loss = float('inf')
         self.total_steps = 0
+        self.early_stopping_counter = 0
 
     def configure_logging(self):
         (PATHS.TENSORBOARD_DIR / self.relative_path).mkdir(parents=True, exist_ok=True)
@@ -88,8 +96,12 @@ class Trainer:
             self.logger.addHandler(logging.NullHandler())
 
     @property
+    def config_key(self) -> CONFIG_KEYS:
+        return get_config_key_by_arch(self._arch_name)
+
+    @property
     def arch_config(self) -> Dict[str, Any]:
-        return self._config.get(get_config_name_by_arch(self._arch_name).value)
+        return self._config[self.config_key.value]  # type: ignore
 
     @property
     def relative_path(self) -> str:
@@ -102,14 +114,22 @@ class Trainer:
         return f"{prefix}/{self._run_id}"
 
     @property
-    def training_config(self) -> Dict[str, Any]:
+    def training_config(self) -> TrainingConfig:
         return self._config['training']
 
     def dump_config(self):
         path = PATHS.TENSORBOARD_DIR / self.relative_path / f'config_{time.strftime(FORMATS.TIME)}.json'
         path.parent.mkdir(parents=True, exist_ok=True)
+        combined_config = {
+            'training': self.training_config,
+            self.config_key: self.arch_config,
+            'finetune_dataset': self._finetune_dataset,
+            'pretrain_dataset': self._pretrain_dataset,
+            'architecture': self._arch_name,
+        }
+
         with open(path, 'w') as f:
-            json.dump(self._config, f, indent=4)
+            json.dump(combined_config, f, indent=4)
 
     def get_loss_fn(self, phase_name: PHASE, pad_token_id: int) -> nn.Module:
         if phase_name == PHASE.CLASSIFICATION:
@@ -144,6 +164,7 @@ class Trainer:
         if (checkpoint_path := self.get_latest_chkpt()) is not None:
             checkpoint = torch.load(checkpoint_path, map_location=device)
             return checkpoint
+        return None
 
     @property
     def rank(self) -> int:
@@ -166,7 +187,28 @@ class Trainer:
         return self._pretrain_dataset is not None
 
     def get_optimizer(self, model: torch.nn.Module) -> optim.Optimizer:
-        return optim.Adam(model.parameters(), lr=self.training_config['learning_rate'])
+        optimizer_type = self.training_config['optimizer_type']
+        optimizer_params = self.training_config['optimizer_params']
+        weight_decay = self.training_config['weight_decay']
+
+        if optimizer_type == OPTIMIZER.ADAM:
+            return optim.Adam(
+                model.parameters(),
+                lr=self.training_config['learning_rate'],
+                weight_decay=weight_decay,
+                **optimizer_params
+            )
+        assert_never(optimizer_type)
+
+    def get_lr_scheduler(self, optimizer: optim.Optimizer) -> Optional[optim.lr_scheduler.StepLR]:
+        scheduler_type = self.training_config['lr_scheduler']
+        scheduler_params = self.training_config['lr_scheduler_params']
+
+        if scheduler_type is None:
+            return None
+        if scheduler_type == LR_SCHEDULER.STEP:
+            return optim.lr_scheduler.StepLR(optimizer, **scheduler_params)
+        assert_never(scheduler_type)
 
     def train_and_evaluate_model(self, rank=0, world_size=1) -> Dict[str, Any]:
         set_seed(self.training_config['seed'])
@@ -225,15 +267,24 @@ class Trainer:
         if phase_name == PHASE.CLASSIFICATION:
             dataset_wrapper = get_text_dataset_factory_by_name(self._finetune_dataset)(phase_name)
         elif phase_name == PHASE.AUTOREGRESSIVE:
+            if self._pretrain_dataset is None:
+                raise ValueError(f'Phase name is {phase_name} but pretrain dataset is not provided')
             dataset_wrapper = get_text_dataset_factory_by_name(self._pretrain_dataset)(phase_name)
         else:
             raise ValueError(f'Invalid phase name: {phase_name}')
         dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN)
 
+        # Debug data size
+        debug_data_size = self.training_config['debug_data_size']
+        if debug_data_size is not None:
+            dataset = torch.utils.data.Subset(dataset, range(debug_data_size))
+
         # We don't want to re-initialize the model if we moved to the fine-tuning phase
         if not skip_model_init:
             architecture.initialize_model(dataset_wrapper)
         optimizer = self.get_optimizer(architecture.model)  # TOOD: do we want to keep the pre-trained optimizer?
+
+        lr_scheduler = self.get_lr_scheduler(optimizer)
 
         start_epoch = 0
         self.logger.info(f"Training {phase_name} phase")
@@ -251,7 +302,7 @@ class Trainer:
             self.best_loss = checkpoint['best_loss']
             self.logger.info(f"Checkpoint loaded")
 
-        self.logger.info(f"params count: {architecture.param_count}")
+        self.logger.info(params_count_report(architecture))
         if STEPS.PRINT_GRAPH and self.is_master_process:
             sample_input_tensor = next(iter(dataset))[0].unsqueeze(0)
             writer.add_graph(architecture.model, sample_input_tensor)
@@ -298,7 +349,18 @@ class Trainer:
                     raise ValueError(f'Invalid phase name: {dataset_wrapper.phase_name}')
 
                 loss.backward()
+
+                # Gradient clipping
+                gradient_clip_value = self.training_config['gradient_clip_value']
+                if gradient_clip_value is not None:
+                    torch.nn.utils.clip_grad_norm_(architecture.model.parameters(), gradient_clip_value)
+
                 optimizer.step()
+                if lr_scheduler is not None:
+                    if isinstance(lr_scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                        lr_scheduler.step(loss)
+                    else:
+                        lr_scheduler.step()
                 self.total_steps += 1
 
                 if self.is_master_process:
@@ -341,6 +403,17 @@ class Trainer:
                                 self.total_steps,
                             )
                         self.logger.info(f'Test Metrics: {metrics}')
+
+                    # Early stopping
+                    early_stopping_patience = self.training_config['early_stopping_patience']
+                    if early_stopping_patience is not None and loss.item() > self.best_loss:
+                        self.early_stopping_counter += 1
+                        if self.early_stopping_counter >= early_stopping_patience:
+                            self.logger.info("Early stopping triggered")
+                            return metrics
+                    else:
+                        self.early_stopping_counter = 0
+
         return metrics
 
     def _evaluate_model(

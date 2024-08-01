@@ -7,5 +7,6 @@ datasets
 einops
 jupyterlab
 protobuf
+humanize
 tensorflow_datasets
 transformers

@@ -43,6 +43,14 @@ class CONFIG_KEYS(STREnum):
     TRAINING = 'training'
 
 
+class LR_SCHEDULER(STREnum):
+    STEP = 'step'
+
+
+class OPTIMIZER(STREnum):
+    ADAM = 'adam'
+
+
 IConfigName = NewType('IConfigName', str)
 
 

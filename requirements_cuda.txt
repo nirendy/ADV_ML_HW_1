@@ -9,3 +9,4 @@ jupyterlab
 protobuf
 tensorflow[and-cuda]
 tensorflow_datasets
+humanize

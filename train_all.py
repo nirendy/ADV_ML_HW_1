@@ -4,64 +4,70 @@ from typing import Optional
 
 from datasets import Dataset
 
+from src.consts import IAddArgs
 from src.types import ARCH
-from src.types import CONFIG_KEYS
-from src.trainer import Trainer
 from src.types import DATASET
+from src.types import IArgs
 from src.types import IConfigName
+import train_one
+from src.utils.argparse_utils import create_dict_from_argparse_remainder
 
 
-def train_all(
+def all_configs(
         config_name: IConfigName,
+        run_id: Optional[str] = None,
         architectures: List[ARCH] = (
                 ARCH.LSTM,
+                ARCH.LSTM_COPY,
                 ARCH.TRANSFORMER,
+                ARCH.TRANSFORMER_COPY,
                 ARCH.S4,
                 ARCH.S4_COPY,
         ),
-        finetune_datasets: List[Dataset] = (
+        finetune_datasets: List[DATASET] = (
                 DATASET.IMDB,
         ),
         pretrain_datasets: List[Optional[Dataset]] = (
                 None,
+                DATASET.IMDB,
+                DATASET.WIKITEXT,
         )
-):
-    for architecture in architectures:
-        for pretrain_dataset in pretrain_datasets:
-            for finetune_dataset in finetune_datasets:
-                pretrain_name = pretrain_dataset.__class__.__name__ if pretrain_dataset else "None"
-                run_id = '.'.join([
-                    writer.get_logdir(),
-                    architecture.__class__.__name__,
-                    finetune_dataset.__class__.__name__,
-                    pretrain_name,
-                ])
-                metrics = trainer.train_and_evaluate_model(
-                    architecture, pretrain_dataset, finetune_dataset, writer, run_id
-                )
-
-                # Record results
-                result = {
-                    'Architecture': architecture.__class__.__name__,
-                    'Pretrain Dataset': pretrain_name,
-                    'Finetune Dataset': finetune_dataset.__class__.__name__,
-                }
-                result.update(metrics)
-                results.append(result)
+) -> List[IArgs]:
+    return [
+        IArgs(
+            config_name=config_name,
+            architecture=architecture,
+            finetune_dataset=finetune_dataset,
+            pretrain_dataset=pretrain_dataset,
+            run_id=run_id,
+        )
+        for architecture in architectures
+        for pretrain_dataset in pretrain_datasets
+        for finetune_dataset in finetune_datasets
+    ]
 
 
-def main():
+def main_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_name', type=str, default='medium')
-
+    parser.add_argument('--run_id', type=str, default=None)
+    parser.add_argument('--with_parallel', type=bool, default=False)
+    parser.add_argument('--with_slurm', type=bool, default=False)
+    parser.add_argument('--extra_args', nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    train_one(
-        architecture=args.architecture,
-        finetune_dataset=args.finetune_dataset,
-        pretrain_dataset=args.pretrain_dataset,
-        config_name=args.config_name
-    )
+
+    for main_args in all_configs(args.config_name, run_id=args.run_id):
+        train_one.main(
+            main_args=main_args,
+            with_slurm=args.with_slurm,
+            add_args=IAddArgs(
+                **{
+                    'with_parallel': args.with_parallel,
+                    **create_dict_from_argparse_remainder(args.extra_args)
+                }
+            )
+        )
 
 
 if __name__ == '__main__':
-    main()
+    main_parser()

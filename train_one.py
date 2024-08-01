@@ -12,6 +12,7 @@ from src.trainer import Trainer
 from src.types import DATASET
 from src.types import IArgs
 from src.types import IConfigName
+from src.utils.argparse_utils import create_dict_from_argparse_remainder
 
 
 def train_one(
@@ -32,28 +33,8 @@ def train_one(
     ).train_and_evaluate_model(rank, world_size)
 
 
-def main_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config_name', type=str, required=True)
-    parser.add_argument('--architecture', type=str, required=True)
-    parser.add_argument('--finetune_dataset', type=str, required=True)
-    parser.add_argument('--pretrain_dataset', type=str, default=None)
-    parser.add_argument('--run_id', type=str, default=None)
-    parser.add_argument('--with_parallel', type=bool, default=False)
-    parser.add_argument('--with_slurm', type=bool, default=False)
-    parser.add_argument('--extra_args', nargs=argparse.REMAINDER)
-    main_args = parser.parse_args()
-
-    kwargs = {
-        'with_parallel': main_args.with_parallel,
-    }
-    if main_args.extra_args is not None:
-        if len(main_args.extra_args) % 2 != 0:
-            raise ValueError('Extra args must be key-value pairs')
-        for i in range(0, len(main_args.extra_args), 2):
-            kwargs[main_args.extra_args[i]] = main_args.extra_args[i + 1]
-
-    func = main_with_slurm if main_args.with_slurm else main
+def main(main_args: IArgs, with_slurm: bool, add_args: IAddArgs):
+    func = main_with_slurm if with_slurm else main_local
     func(
         IArgs(
             main_args.config_name,
@@ -62,7 +43,7 @@ def main_parser():
             main_args.pretrain_dataset,
             main_args.run_id,
         ),
-        **kwargs
+        **(add_args._asdict())
     )
 
 
@@ -76,7 +57,7 @@ def main_with_slurm(args: IArgs, **kwargs):
     )
 
 
-def main(args: IArgs, with_parallel: bool):
+def main_local(args: IArgs, with_parallel: bool):
     if with_parallel:
         set_seed(42)  # TODO: Need here? (we do it again after the spawn)
         world_size = torch.cuda.device_count()
@@ -92,6 +73,34 @@ def main(args: IArgs, with_parallel: bool):
             None,
             *args
         )
+
+
+def main_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_name', type=str, required=True)
+    parser.add_argument('--architecture', type=str, required=True)
+    parser.add_argument('--finetune_dataset', type=str, required=True)
+    parser.add_argument('--pretrain_dataset', type=str, default=None)
+    parser.add_argument('--run_id', type=str, default=None)
+    parser.add_argument('--with_parallel', type=bool, default=False)
+    parser.add_argument('--with_slurm', type=bool, default=False)
+    parser.add_argument('--extra_args', nargs=argparse.REMAINDER)
+    main_args = parser.parse_args()
+
+    main(
+        main_args=IArgs(
+            **{
+                k: v
+                for k, v in vars(main_args).items()
+                if k not in ['extra_args', 'with_parallel', 'with_slurm']
+            }
+        ),
+        with_slurm=main_args.with_slurm,
+        **{
+            'with_parallel': main_args.with_parallel,
+            **create_dict_from_argparse_remainder(main_args.extra_args)
+        }
+    )
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ import time
 from typing import Optional
 from typing import Type
 
+import humanize
 from typing_extensions import assert_never
 
 from src.consts import FORMATS
@@ -46,7 +47,7 @@ def get_arch_by_name(arch_name: ARCH) -> Type[Architecture]:
         raise ValueError(f'Invalid architecture name: {arch_name}')
 
 
-def get_config_name_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
+def get_config_key_by_arch(arch_name: ARCH) -> CONFIG_KEYS:
     if arch_name == ARCH.LSTM or arch_name == ARCH.LSTM_COPY:
         return CONFIG_KEYS.LSTM
     elif arch_name == ARCH.TRANSFORMER or arch_name == ARCH.TRANSFORMER_COPY:
@@ -70,13 +71,22 @@ def construct_experiment_name(
         finetune_dataset: DATASET,
         pretrain_dataset: Optional[DATASET] = None
 ) -> str:
-    return '_'.join([
+    return '__'.join([
         config_name,
         arch_name,
-        *(['pre_' + pretrain_dataset] if pretrain_dataset else []),
         finetune_dataset,
+        *(['pre_' + pretrain_dataset] if pretrain_dataset else []),
     ])
 
 
 def create_run_id(run_id: Optional[str]) -> str:
     return run_id if (run_id is not None) else time.strftime(FORMATS.TIME)
+
+
+def params_count_report(architecture: Architecture) -> str:
+    total_params = architecture.count_params()
+    model_specific_params = total_params - architecture.count_params(abstract_params_only=True)
+    return '\n'.join([
+        f'Model specific params: {humanize.intcomma(model_specific_params)}',
+        f'Total params: {humanize.intcomma(total_params)}',
+    ])
