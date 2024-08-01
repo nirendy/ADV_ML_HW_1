@@ -1,3 +1,4 @@
+from src.types import LR_SCHEDULER
 from src.types import OPTIMIZER
 from src.utils.config_types import Config
 from src.utils.config_types import LSTMConfig
@@ -29,10 +30,10 @@ config = Config(
         learning_rate=0.0005,
         epochs=20,
         seed=42,
-        debug_data_size=50000,
+        debug_data_size=None,
         # dropout_rate=0.3,
         weight_decay=0.01,
-        lr_scheduler='step',
+        lr_scheduler=LR_SCHEDULER.STEP,
         lr_scheduler_params={'step_size': 10, 'gamma': 0.1},
         gradient_clip_value=1.0,
         # weight_init_method='xavier_uniform',

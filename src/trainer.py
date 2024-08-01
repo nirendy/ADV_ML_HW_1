@@ -8,7 +8,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 from typing import TypedDict
-from typing import assert_never
+from typing_extensions import assert_never
 
 import numpy as np
 import torch

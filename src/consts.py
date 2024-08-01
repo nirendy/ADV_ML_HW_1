@@ -68,3 +68,4 @@ class IAddArgs(NamedTuple):
     account: str = 'gpu-research'
     workspace: Path = PATHS.PROJECT_DIR
     outputs_relative_path: Path = PATHS.TENSORBOARD_DIR.relative_to(PATHS.PROJECT_DIR)
+    master_port: str = DDP.MASTER_PORT

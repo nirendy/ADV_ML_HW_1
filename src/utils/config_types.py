@@ -31,7 +31,7 @@ class TrainingConfig(TypedDict):
     learning_rate: float
     epochs: int
     seed: int
-    debug_data_size: int
+    debug_data_size: Optional[int]
     weight_decay: float
     lr_scheduler: Optional[LR_SCHEDULER]
     lr_scheduler_params: Dict[str, Any]

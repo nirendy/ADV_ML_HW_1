@@ -94,10 +94,12 @@ def main_parser():
             }
         ),
         with_slurm=main_args.with_slurm,
-        **{
-            'with_parallel': main_args.with_parallel,
-            **create_dict_from_argparse_remainder(main_args.extra_args)
-        }
+        add_args=IAddArgs(
+            **{
+                'with_parallel': main_args.with_parallel,
+                **create_dict_from_argparse_remainder(main_args.extra_args)
+            }
+        )
     )
 
 

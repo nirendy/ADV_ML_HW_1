@@ -4,6 +4,7 @@ from typing import Optional
 
 from datasets import Dataset
 
+from src.consts import DDP
 from src.consts import IAddArgs
 from src.types import ARCH
 from src.types import DATASET
@@ -17,7 +18,7 @@ from src.utils.experiment_runner import construct_experiment_name
 def all_configs(
         config_name: IConfigName,
         run_id: Optional[str] = None,
-        architectures: list[ARCH] = (
+        architectures: List[ARCH] = (
                 ARCH.LSTM,
                 ARCH.LSTM_COPY,
                 ARCH.TRANSFORMER,
@@ -25,10 +26,10 @@ def all_configs(
                 ARCH.S4,
                 ARCH.S4_COPY,
         ),
-        finetune_datasets: list[DATASET] = (
+        finetune_datasets: List[DATASET] = (
                 DATASET.IMDB,
         ),
-        pretrain_datasets: list[Optional[Dataset]] = (
+        pretrain_datasets: List[Optional[Dataset]] = (
                 None,
                 DATASET.IMDB,
                 DATASET.WIKITEXT,
@@ -57,14 +58,15 @@ def main_parser():
     parser.add_argument('--extra_args', nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
-    for main_args in all_configs(args.config_name, run_id=args.run_id):
+    for i, main_args in enumerate(all_configs(args.config_name, run_id=args.run_id)):
         print(f"{'-' * 30} {construct_experiment_name(*main_args[:-1])} {'-' * 30}")
         train_one.main(
             main_args=main_args,
             with_slurm=args.with_slurm,
             add_args=IAddArgs(
+                with_parallel=args.with_parallel,
+                master_port=str(int(DDP.MASTER_PORT) + i),
                 **{
-                    'with_parallel': args.with_parallel,
                     **create_dict_from_argparse_remainder(args.extra_args)
                 }
             )

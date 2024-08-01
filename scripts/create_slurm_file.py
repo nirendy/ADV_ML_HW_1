@@ -49,8 +49,6 @@ gpustat --no-color -pfu
 # Activate the conda environment
 source {add_args.workspace}/venv/bin/activate
 
-export PYTHONUNBUFFERED=1
-
 # Print diagnostic information
 echo $CUDA_VISIBLE_DEVICES
 echo "Python version: $(python --version)"
@@ -61,6 +59,8 @@ echo $(pwd)
 cd {add_args.workspace}
 
 # Export environment variables
+export PYTHONUNBUFFERED=1
+export MASTER_PORT={add_args.master_port}
 
 {command_str}
 
