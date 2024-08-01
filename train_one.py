@@ -36,34 +36,32 @@ def train_one(
 def main(main_args: IArgs, with_slurm: bool, add_args: IAddArgs):
     func = main_with_slurm if with_slurm else main_local
     func(
-        IArgs(
+        main_args=IArgs(
             main_args.config_name,
             main_args.architecture,
             main_args.finetune_dataset,
             main_args.pretrain_dataset,
             main_args.run_id,
         ),
-        **(add_args._asdict())
+        add_args=add_args
     )
 
 
-def main_with_slurm(args: IArgs, **kwargs):
+def main_with_slurm(main_args: IArgs, add_args: IAddArgs):
     # python train_one.py  --config_name tiny1 --architecture transformer_copy --finetune_dataset imdb --with_parallel True --with_slurm True
     run_slurm(
-        args,
-        IAddArgs(
-            **kwargs
-        )
+        main_args,
+        add_args
     )
 
 
-def main_local(args: IArgs, with_parallel: bool):
-    if with_parallel:
+def main_local(main_args: IArgs, add_args: IAddArgs):
+    if add_args.with_parallel:
         set_seed(42)  # TODO: Need here? (we do it again after the spawn)
         world_size = torch.cuda.device_count()
         mp.spawn(
             fn=train_one,
-            args=(world_size, *args),
+            args=(world_size, *main_args),
             nprocs=world_size,
             join=True,
         )
@@ -71,7 +69,7 @@ def main_local(args: IArgs, with_parallel: bool):
         train_one(
             None,
             None,
-            *args
+            *main_args
         )
 
 

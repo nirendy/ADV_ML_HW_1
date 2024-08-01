@@ -30,6 +30,7 @@ from src.types import CONFIG_KEYS
 from src.types import DATASET
 from src.types import IConfigName
 from src.types import LR_SCHEDULER
+from src.types import METRICS
 from src.types import OPTIMIZER
 from src.types import PHASE
 from src.types import SPLIT
@@ -272,12 +273,7 @@ class Trainer:
             dataset_wrapper = get_text_dataset_factory_by_name(self._pretrain_dataset)(phase_name)
         else:
             raise ValueError(f'Invalid phase name: {phase_name}')
-        dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN)
-
-        # Debug data size
-        debug_data_size = self.training_config['debug_data_size']
-        if debug_data_size is not None:
-            dataset = torch.utils.data.Subset(dataset, range(debug_data_size))
+        dataset = dataset_wrapper.get_dataset(SPLIT.TRAIN, self.training_config['debug_data_size'])
 
         # We don't want to re-initialize the model if we moved to the fine-tuning phase
         if not skip_model_init:
@@ -375,7 +371,7 @@ class Trainer:
                             loss.item(),
                             self.total_steps
                         )
-                        self.best_loss = min(self.best_loss, loss.item())
+
                         self.logger.info(
                             f'{dataset_wrapper.phase_name} Epoch [{epoch + 1}/{self.training_config["epochs"]}], '
                             f'Step [{i_epoch_step + 1}/{len(data_loader)}], Total Steps: {self.total_steps}, Loss: {loss.item():.4f}'
@@ -386,52 +382,74 @@ class Trainer:
                             architecture, optimizer, epoch,
                             during_pretraining=dataset_wrapper.phase_name == PHASE.AUTOREGRESSIVE
                         )
-                    if (
-                            dataset_wrapper.phase_name == PHASE.CLASSIFICATION
-                            and self.total_steps >= STEPS.WARMUP_STEPS
-                            and self.total_steps % STEPS.EVAL_STEP == 0
-                    ):
-                        metrics = self._evaluate_model(architecture, dataset_wrapper, SPLIT.TEST, device)
-                        for key, value in metrics.items():
-                            writer.add_scalar(
-                                '/'.join([
-                                    self.relative_path,
-                                    dataset_wrapper.phase_name,
-                                    key
-                                ]),
-                                value,
-                                self.total_steps,
-                            )
-                        self.logger.info(f'Test Metrics: {metrics}')
 
-                    # Early stopping
-                    early_stopping_patience = self.training_config['early_stopping_patience']
-                    if early_stopping_patience is not None and loss.item() > self.best_loss:
-                        self.early_stopping_counter += 1
-                        if self.early_stopping_counter >= early_stopping_patience:
-                            self.logger.info("Early stopping triggered")
-                            return metrics
-                    else:
-                        self.early_stopping_counter = 0
+                if (
+                        dataset_wrapper.phase_name == PHASE.CLASSIFICATION
+                        and self.total_steps >= STEPS.WARMUP_STEPS
+                        and self.total_steps % STEPS.EVAL_STEP == 0
+                ):
+                    metrics = self._evaluate_model(architecture, dataset_wrapper, SPLIT.TEST, device)
+                    self.best_loss = min(self.best_loss, metrics[METRICS.LOSS])
+                    for key, value in metrics.items():
+                        writer.add_scalar(
+                            '/'.join([
+                                self.relative_path,
+                                dataset_wrapper.phase_name,
+                                'test_' + key
+                            ]),
+                            value,
+                            self.total_steps,
+                        )
+                    self.logger.info(f'Test Metrics: {metrics}')
+
+                    if self.training_config['early_stopping']:
+                        # Early stopping
+                        early_stopping_patience = self.training_config['early_stopping_patience']
+                        if metrics[METRICS.LOSS] > self.best_loss:
+                            self.early_stopping_counter += 1
+                            if self.early_stopping_counter >= early_stopping_patience:
+                                self.logger.info("Early stopping triggered")
+                                return metrics
+                        else:
+                            self.early_stopping_counter = 0
 
         return metrics
 
     def _evaluate_model(
             self,
             architecture: Architecture,
-            dataset: TextDatasetFactory,
+            dataset_wrapper: TextDatasetFactory,
             split: SPLIT,
             device: torch.device,
     ) -> Dict[str, float]:
-        data_loader = DataLoader(
-            dataset.get_dataset(split),
-            batch_size=self.training_config['batch_size']
-        )
+        # Debug data size
+        dataset = dataset_wrapper.get_dataset(split, self.training_config['debug_data_size'])
+        if self.is_distributed:
+            sampler = DistributedSampler(
+                dataset,
+                num_replicas=self.world_size,
+                rank=self.rank,
+                shuffle=False,
+                drop_last=DDP.DROP_LAST
+            )
+            data_loader = DataLoader(
+                dataset,
+                batch_size=self.training_config['batch_size'],
+                sampler=sampler,
+                num_workers=DDP.NUM_WORKERS,
+                worker_init_fn=lambda x: set_seed(self.training_config['seed']),
+                # collate_fn=dataset.collate_fn
+            )
+        else:
+            data_loader = DataLoader(
+                dataset,
+                batch_size=self.training_config['batch_size']
+            )
 
         test_loss = 0
         correct = 0
         total = 0
-        loss_fn = self.get_loss_fn(PHASE.CLASSIFICATION, dataset.tokenizer.pad_token_id)
+        loss_fn = self.get_loss_fn(PHASE.CLASSIFICATION, dataset_wrapper.tokenizer.pad_token_id)
         with torch.no_grad():
             for data in data_loader:
                 inputs, labels = data
@@ -444,7 +462,7 @@ class Trainer:
                 # noinspection PyUnresolvedReferences
                 correct += (predicted == labels).sum().item()
         accuracy = 100 * correct / total
-        return {'Test Loss': test_loss / len(data_loader), 'Test Accuracy': accuracy}
+        return {METRICS.LOSS: test_loss / len(data_loader), METRICS.ACCURACY: accuracy}
 
     def get_latest_chkpt(self) -> Optional[Path]:
         dir_path = PATHS.CHECKPOINTS_DIR / self.relative_path

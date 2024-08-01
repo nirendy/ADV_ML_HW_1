@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from pathlib import Path
 
+import torch
 from datasets import Dataset
 from torch.utils.data import Dataset as TorchDataset
 from transformers import BertTokenizer
@@ -78,13 +79,17 @@ class TextDatasetFactory(DatasetFactory):
             return self.vocab_size
         assert_never(self.phase_name)
 
-    def get_dataset(self, split: SPLIT) -> TorchDataset:
-        return TextDataset(
+    def get_dataset(self, split: SPLIT, debug_data_size: int = None
+                    ) -> TorchDataset:
+        dataset = TextDataset(
             dataset=self.load_dataset()[split],
             tokenizer=self.tokenizer,
             phase_name=self.phase_name,
             with_decode=self.with_decode
         )
+        if debug_data_size is not None:
+            return torch.utils.data.Subset(dataset, range(debug_data_size))
+        return dataset
 
     @abstractmethod
     def load_dataset(self) -> Dataset:

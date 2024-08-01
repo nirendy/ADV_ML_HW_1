@@ -51,6 +51,11 @@ class OPTIMIZER(STREnum):
     ADAM = 'adam'
 
 
+class METRICS(STREnum):
+    ACCURACY = 'accuracy'
+    LOSS = 'loss'
+
+
 IConfigName = NewType('IConfigName', str)
 
 

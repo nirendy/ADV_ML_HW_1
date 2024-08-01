@@ -34,7 +34,7 @@ config = Config(
         # lr_scheduler_params={'step_size': 10, 'gamma': 0.1},
         # gradient_clip_value=1.0,
         # weight_init_method='xavier_uniform',
-        # optimizer_type='adam',
+        # optimizer_type=OPTIMIZER.ADAM,
         # optimizer_params={'betas': (0.9, 0.999), 'eps': 1e-08},
         # use_batch_norm=True,
         # sequence_length=500,
@@ -43,4 +43,3 @@ config = Config(
         # early_stopping_patience=5,
     ),
 )
-

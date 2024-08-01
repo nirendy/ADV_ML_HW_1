@@ -77,6 +77,11 @@ class Architecture(ABC):
 
     def count_params(self, abstract_params_only=False) -> int:
         """Return the number of parameters in the model."""
+        if abstract_params_only:
+            return (
+                    sum(p.numel() for p in self.model.embedding.parameters())
+                    + sum(p.numel() for p in self.model.fc.parameters())
+            )
         return sum(p.numel() for p in self.model.parameters())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

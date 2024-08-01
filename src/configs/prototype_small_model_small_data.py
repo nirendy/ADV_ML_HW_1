@@ -1,3 +1,4 @@
+from src.types import OPTIMIZER
 from src.utils.config_types import Config
 from src.utils.config_types import LSTMConfig
 from src.utils.config_types import S4Config
@@ -27,6 +28,7 @@ config = Config(
         batch_size=16,
         learning_rate=0.001,
         epochs=5,
+        seed=42,
         debug_data_size=1000,
         # dropout_rate=0.1,
         weight_decay=0.01,
@@ -34,7 +36,7 @@ config = Config(
         lr_scheduler_params={'step_size': 5, 'gamma': 0.1},
         gradient_clip_value=1.0,
         # weight_init_method='xavier_uniform',
-        optimizer_type='adam',
+        optimizer_type=OPTIMIZER.ADAM,
         optimizer_params={'betas': (0.9, 0.999), 'eps': 1e-08},
         # use_batch_norm=False,
         # sequence_length=500,

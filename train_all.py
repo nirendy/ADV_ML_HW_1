@@ -11,12 +11,13 @@ from src.types import IArgs
 from src.types import IConfigName
 import train_one
 from src.utils.argparse_utils import create_dict_from_argparse_remainder
+from src.utils.experiment_runner import construct_experiment_name
 
 
 def all_configs(
         config_name: IConfigName,
         run_id: Optional[str] = None,
-        architectures: List[ARCH] = (
+        architectures: list[ARCH] = (
                 ARCH.LSTM,
                 ARCH.LSTM_COPY,
                 ARCH.TRANSFORMER,
@@ -24,10 +25,10 @@ def all_configs(
                 ARCH.S4,
                 ARCH.S4_COPY,
         ),
-        finetune_datasets: List[DATASET] = (
+        finetune_datasets: list[DATASET] = (
                 DATASET.IMDB,
         ),
-        pretrain_datasets: List[Optional[Dataset]] = (
+        pretrain_datasets: list[Optional[Dataset]] = (
                 None,
                 DATASET.IMDB,
                 DATASET.WIKITEXT,
@@ -49,7 +50,7 @@ def all_configs(
 
 def main_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_name', type=str, default='medium')
+    parser.add_argument('--config_name', type=str, required=True)
     parser.add_argument('--run_id', type=str, default=None)
     parser.add_argument('--with_parallel', type=bool, default=False)
     parser.add_argument('--with_slurm', type=bool, default=False)
@@ -57,6 +58,7 @@ def main_parser():
     args = parser.parse_args()
 
     for main_args in all_configs(args.config_name, run_id=args.run_id):
+        print(f"{'-' * 30} {construct_experiment_name(*main_args[:-1])} {'-' * 30}")
         train_one.main(
             main_args=main_args,
             with_slurm=args.with_slurm,

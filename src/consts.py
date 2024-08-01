@@ -34,8 +34,8 @@ class DATASETS_CONSTANTS:
 
 
 class STEPS:
-    WARMUP_STEPS = 20
-    SAVE_STEP = 500
+    WARMUP_STEPS = 0
+    SAVE_STEP = 1000
     LOG_STEP = 50
     EVAL_STEP = 1000
     PRINT_GRAPH = False
@@ -66,5 +66,5 @@ class IAddArgs(NamedTuple):
     cpus_per_task: int = 1
     gpus: int = 2
     account: str = 'gpu-research'
-    workspace = PATHS.PROJECT_DIR
-    outputs_relative_path = PATHS.TENSORBOARD_DIR.relative_to(PATHS.PROJECT_DIR)
+    workspace: Path = PATHS.PROJECT_DIR
+    outputs_relative_path: Path = PATHS.TENSORBOARD_DIR.relative_to(PATHS.PROJECT_DIR)
